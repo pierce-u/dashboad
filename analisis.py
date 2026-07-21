@@ -10,33 +10,38 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Fondo de Alto Contraste
+# 2. Inyección de CSS para Efecto Relieve 3D y Alto Contraste
 st.markdown("""
     <style>
+    /* Fondo principal del dashboard */
     .stApp {
         background-color: #030712;
         color: #f8fafc;
     }
     
+    /* Barra lateral */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19;
         border-right: 1px solid #1e293b;
     }
     
+    /*Tarjetas de Métricas con Relieve 3D */
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #0f172a, #131d33);
+        background: linear-gradient(145deg, #131d31, #0c1322);
         border: 1px solid #334155;
+        border-top: 1px solid #475569; /* Luz superior para relieve */
+        border-left: 1px solid #475569;
         border-radius: 16px;
         padding: 22px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8), 
-                    inset 0 1px 1px rgba(255, 255, 255, 0.1);
+        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.85), 
+                    inset 0 1px 2px rgba(255, 255, 255, 0.15);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 14px 32px -5px rgba(0, 0, 0, 0.9), 
-                    0 0 20px rgba(0, 242, 254, 0.3);
+        transform: translateY(-4px);
+        box-shadow: 0 18px 35px -5px rgba(0, 0, 0, 0.95), 
+                    0 0 25px rgba(0, 242, 254, 0.4);
         border-color: #00f2fe;
     }
 
@@ -55,17 +60,20 @@ st.markdown("""
         text-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
     }
     
+    /* Contenedores / Cuadros de las Gráficas con Relieve 3D */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
-        background-color: #0f172a !important;
-        border: 1px solid #283548 !important;
-        border-radius: 18px !important;
-        padding: 20px !important;
-        box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.8), 
-                    inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
+        background: linear-gradient(145deg, #0f172a, #090e1a) !important;
+        border: 1px solid #2d3d54 !important;
+        border-top: 1px solid #475569 !important; /* Bisel de luz superior */
+        border-left: 1px solid #475569 !important; /* Bisel de luz izquierdo */
+        border-radius: 20px !important;
+        padding: 22px !important;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.85), 
+                    inset 0 1px 2px rgba(255, 255, 255, 0.1) !important;
     }
 
     h1 { color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
-    h3 { color: #38bdf8; font-size: 1.2rem !important; font-weight: 700; margin-bottom: 15px; }
+    h3 { color: #38bdf8; font-size: 1.25rem !important; font-weight: 700; margin-bottom: 15px; }
     hr { border-color: #1e293b; }
     </style>
 """, unsafe_allow_html=True)
@@ -181,8 +189,8 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. PALETAS Y ESTILOS
-color_fondo_grafica = "#1e293b"
+# 7. COLOR MÁS CLARO PARA EL LIENZO DE LA GRÁFICA (ALTO CONTRASTE Y CONTENIDO DESTACADO)
+color_fondo_grafica = "#1e2d42" # Tono Gris-Azulado más claro que resalta dentro de la tarjeta
 
 COLORES_MESES = {
     'Enero': '#00f2fe',
@@ -307,18 +315,16 @@ else:
                 
                 fig_lollipop = go.Figure()
 
-                # Líneas horizontales estilizadas
                 for i, row in top10_conceptos.iterrows():
                     fig_lollipop.add_trace(go.Scatter(
                         x=[0, row['Monto']],
                         y=[row['Concepto'], row['Concepto']],
                         mode='lines',
-                        line=dict(color='#3b82f6', width=3),
+                        line=dict(color='#38bdf8', width=3),
                         showlegend=False,
                         hoverinfo='skip'
                     ))
 
-                # Puntos/Círculos Neón en los extremos con los montos
                 fig_lollipop.add_trace(go.Scatter(
                     x=top10_conceptos['Monto'],
                     y=top10_conceptos['Concepto'],
@@ -335,7 +341,6 @@ else:
                     hovertemplate="<b>%{y}</b><br>Monto: $%{-x:,.2f}<extra></extra>"
                 ))
 
-                # Ajustar margen x para que no se recorte el texto del último elemento
                 max_val = top10_conceptos['Monto'].max() * 1.25
 
                 fig_lollipop.update_layout(
