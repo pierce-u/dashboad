@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 
 # 1. Configuración de la página
@@ -64,7 +63,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Cargar datos
+# 3. Cargar datos de forma segura sin descartar filas
 @st.cache_data
 def cargar_datos():
     hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
@@ -75,7 +74,25 @@ def cargar_datos():
             continue
             
         df_hoja = df_hoja.copy()
-        df_hoja.columns = df_hoja.columns.astype(str).str.strip()
+        # Normalizar nombres de columnas
+        df_hoja.columns = [str(c).strip() for c in df_hoja.columns]
+        
+        # Mapear variaciones de nombres de columnas
+        renombres = {}
+        for col in df_hoja.columns:
+            c_low = col.lower()
+            if 'monto' in c_low or 'dólares' in c_low or 'dolares' in c_low or 'venta' in c_low:
+                renombres[col] = 'Monto'
+            elif 'categor' in c_low:
+                renombres[col] = 'Categoria'
+            elif 'concepto' in c_low or 'producto' in c_low or 'descripcion' in c_low:
+                renombres[col] = 'Concepto'
+            elif 'fecha' in c_low:
+                renombres[col] = 'Fecha'
+                
+        df_hoja.rename(columns=renombres, inplace=True)
+        
+        # Asignar el mes según la pestaña del Excel
         df_hoja['Mes'] = str(nombre_hoja).strip().capitalize()
         dfs.append(df_hoja)
         
@@ -84,35 +101,21 @@ def cargar_datos():
 
     df = pd.concat(dfs, ignore_index=True)
     
-    renombres = {
-        'Monto en dólares': 'Monto',
-        'monto en dólares': 'Monto',
-        'Categoría': 'Categoria',
-        'categoría': 'Categoria',
-        'concepto': 'Concepto'
-    }
-    df.rename(columns=renombres, inplace=True)
+    # Asegurar que la columna Monto sea numérica
+    if 'Monto' in df.columns:
+        df['Monto'] = pd.to_numeric(df['Monto'], errors='coerce')
+        df = df.dropna(subset=['Monto'])
     
-    if 'Concepto' in df.columns:
-        df = df[df['Concepto'].astype(str).str.strip().str.lower() != 'total']
+    # Conversión segura de Fechas
+    if 'Fecha' in df.columns:
+        df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
         
-    df = df.dropna(subset=['Monto'])
-    
-    def corregir_fecha(val):
-        if pd.isna(val):
-            return val
-        val_str = str(val).strip()
-        if '31/04/' in val_str or '31-04-' in val_str or '2026-04-31' in val_str:
-            val_str = val_str.replace('31/04/', '30/04/').replace('31-04-', '30-04-').replace('2026-04-31', '2026-04-30')
-        return val_str
-
-    df['Fecha_Texto'] = df['Fecha'].apply(corregir_fecha)
-    df['Fecha'] = pd.to_datetime(df['Fecha_Texto'], dayfirst=True, errors='coerce')
-    
     if 'Categoria' in df.columns:
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
-        df = df[df['Categoria'].str.lower() != 'nan']
         
+    if 'Concepto' in df.columns:
+        df['Concepto'] = df['Concepto'].astype(str).str.strip()
+
     return df
 
 try:
@@ -121,7 +124,7 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# MAPA DE MESES
+# MAPA OFICIAL DE MESES
 MAPA_MESES = {
     'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4,
     'Mayo': 5, 'Junio': 6, 'Julio': 7, 'Agosto': 8,
@@ -132,7 +135,7 @@ MESES_ORDENADOS = list(MAPA_MESES.keys())
 meses_detectados = df['Mes'].unique() if not df.empty else []
 meses_disponibles = [m for m in MESES_ORDENADOS if m in meses_detectados]
 
-# 4. BARRA LATERAL
+# 4. BARRA LATERAL (FILTROS)
 st.sidebar.title("🎛️ Panel de Control")
 
 fecha_min_def = pd.to_datetime("2026-01-01").date()
@@ -152,7 +155,7 @@ meses_seleccionados = st.sidebar.multiselect(
     default=[]
 )
 
-categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']) if not df.empty else []
+categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() not in ['nan', 'none', '']]) if not df.empty else []
 
 categorias_seleccionadas = st.sidebar.multiselect(
     "🏷️ Seleccionar Categoría(s):",
@@ -160,10 +163,10 @@ categorias_seleccionadas = st.sidebar.multiselect(
     default=categorias_disponibles
 )
 
-# 5. LÓGICA DE FILTRADO CORREGIDA (CÁLCULO EXACTO DE TOTALES)
+# 5. APLICAR FILTROS
 df_filtrado = df.copy()
 
-# Regla 1: Si hay meses seleccionados en el desplegable, los meses mandan (con su rango continuo)
+# A. Si selecciona meses manualmente en el desplegable
 if meses_seleccionados:
     indices = [MAPA_MESES[m] for m in meses_seleccionados if m in MAPA_MESES]
     if indices:
@@ -171,27 +174,27 @@ if meses_seleccionados:
         meses_rango_continuo = [m for m, idx in MAPA_MESES.items() if idx_min <= idx <= idx_max]
         df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_rango_continuo)]
 
-# Regla 2: Si NO seleccionó ningún mes manualmente, se aplica el filtro por Rango de Fechas
+# B. Si NO hay meses en el desplegable, filtra por el Calendario de Fechas
 elif isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
     f_inicio, f_fin = rango_fechas
-    if 'Fecha' in df_filtrado.columns:
+    if 'Fecha' in df_filtrado.columns and not df_filtrado['Fecha'].isna().all():
         df_filtrado = df_filtrado[
             (df_filtrado['Fecha'].dt.date >= f_inicio) & 
             (df_filtrado['Fecha'].dt.date <= f_fin)
         ]
 
-# Regla 3: Filtrar por Categorías siempre
+# C. Filtro por Categorías
 if categorias_seleccionadas and 'Categoria' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
-# Determinar los meses que realmente están presentes en los datos filtrados
+# Determinar meses visibles
 if not df_filtrado.empty:
     meses_presentes = df_filtrado['Mes'].unique()
     meses_a_graficar = [m for m in MESES_ORDENADOS if m in meses_presentes]
 else:
     meses_a_graficar = []
 
-# 6. HEADER Y MÉTRICAS (CALCULADAS DIRECTAMENTE SOBRE LOS DATOS FILTRADOS)
+# 6. HEADER Y MÉTRICAS
 st.title("💼 Dashboard de Ventas Ejecutivas 2026")
 st.markdown("---")
 
