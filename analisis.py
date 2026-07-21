@@ -115,20 +115,26 @@ else:
     col_left, col_right = st.columns(2)
     
     with col_left:
-        st.subheader("📈 Evolución de Ventas por Mes")
+        st.subheader("📊 Evolución de Ventas por Mes")
         if 'Mes' in df_filtrado.columns:
             ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
             ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=orden_meses, ordered=True)
             ventas_por_mes = ventas_por_mes.sort_values('Mes')
             
-            fig_linea = px.line(
+            # Gráfico de barras con un color por mes (color='Mes')
+            fig_barras = px.bar(
                 ventas_por_mes,
                 x='Mes',
                 y='Monto',
-                markers=True,
+                color='Mes',
+                text_auto='.2s', # Muestra el monto formateado sobre cada barra
+                labels={'Monto': 'Monto ($ USD)', 'Mes': 'Mes'},
                 template="plotly_dark"
             )
-            st.plotly_chart(fig_linea, use_container_width=True)
+            fig_barras.update_traces(textposition='outside')
+            fig_barras.update_layout(showlegend=False) # Ocultar leyenda para mayor limpieza
+            
+            st.plotly_chart(fig_barras, use_container_width=True)
 
     with col_right:
         st.subheader("🏷️ Participación por Categoría")
