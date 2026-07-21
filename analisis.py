@@ -120,6 +120,7 @@ def cargar_datos():
 
     df['Fecha_Texto'] = df['Fecha'].apply(corregir_fecha)
     df['Fecha'] = pd.to_datetime(df['Fecha_Texto'], dayfirst=True, errors='coerce')
+    df['Dia'] = df['Fecha'].dt.day
     
     if 'Categoria' in df.columns:
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
@@ -187,94 +188,108 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS CON COLORES VÍVIDOS Y EFECTO 3D
+# 7. PALETAS Y MAPAS DE COLORES NÉON / EJECUTIVOS
 color_fondo_grafica = "#151e2e"
 
-# Paletas de colores vívidos neón y ejecutivos para cada categoría
-COLORES_CATEGORIAS = {
-    'Servicios': '#00f2fe',     # Cyan Neón
-    'Electrónica': '#ff007f',   # Rosa/Magenta Eléctrico
-    'Mobiliario': '#ffbe0b',    # Oro Neón
-    'Software': '#00f5d4',      # Verde Menta / Esmeralda
-    'Accesorios': '#8338ec'     # Púrpura Ejecutiva
+COLORES_MESES = {
+    'Enero': '#00f2fe',      # Cian Neón
+    'Febrero': '#ff007f',    # Magenta Eléctrico
+    'Marzo': '#ffbe0b',      # Oro Neón
+    'Abril': '#00f5d4',      # Verde Menta
+    'Mayo': '#8338ec',      # Púrpura
+    'Junio': '#3a86ff',     # Azul Eléctrico
+    'Julio': '#ff006e',     # Rosa Neón
+    'Agosto': '#fb5607',    # Naranja Neón
+    'Septiembre': '#7000ff',# Violeta
+    'Octubre': '#38bdf8',   # Celeste
+    'Noviembre': '#f472b6', # Rosa Pastel
+    'Diciembre': '#a78bfa'  # Lavanda
 }
 
-paleta_meses = ['#00f2fe', '#4facfe', '#7000ff', '#f107a3', '#ff007f', '#00f5d4']
+COLORES_CATEGORIAS = {
+    'Servicios': '#00f2fe',
+    'Electrónica': '#ff007f',
+    'Mobiliario': '#ffbe0b',
+    'Software': '#00f5d4',
+    'Accesorios': '#8338ec'
+}
 
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: Ventas por Mes (Horizontal) & Categorías (Gráfica Circular 3D / Donut) ---
-    col_left, col_right = st.columns(2)
-    
-    with col_left:
-        with st.container(border=True):
-            st.subheader("📊 Rendimiento de Ventas por Mes")
-            if 'Mes' in df_filtrado.columns:
-                ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-                ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=meses_disponibles, ordered=True)
-                ventas_por_mes = ventas_por_mes.sort_values('Mes', ascending=False).dropna(subset=['Mes'])
+    # --- FILA 1: GRAFICA LINEAL 3D (TENDENCIA POR MES CON COLOR Y NOMBRE EN SERIE) ---
+    with st.container(border=True):
+        st.subheader("📈 Tendencia Lineal 3D de Ventas Diarias por Mes")
+        
+        fig_linea_3d = go.Figure()
+        
+        # Filtrar meses ordenados presentes en el dataframe
+        meses_en_datos = [m for m in meses_disponibles if m in df_filtrado['Mes'].unique()]
+        
+        for idx_m, mes in enumerate(meses_en_datos):
+            df_m = df_filtrado[df_filtrado['Mes'] == mes]
+            if df_m.empty:
+                continue
                 
-                fig_barras = px.bar(
-                    ventas_por_mes,
-                    y='Mes',
-                    x='Monto',
-                    color='Mes',
-                    orientation='h',
-                    text_auto='.3s',
-                    labels={'Monto': 'Ventas ($)', 'Mes': 'Mes'},
-                    color_discrete_sequence=paleta_meses,
-                    template="plotly_dark"
+            # Agrupar por día para obtener la tendencia temporal
+            df_dia = df_m.groupby('Dia')['Monto'].sum().reset_index().sort_values('Dia')
+            
+            color_mes = COLORES_MESES.get(mes, '#00f2fe')
+            
+            # Crear arreglo de textos para colocar el nombre del mes flotando en el último día
+            textos = [''] * len(df_dia)
+            if len(textos) > 0:
+                textos[-1] = f"<b> {mes}</b>"
+            
+            fig_linea_3d.add_trace(go.Scatter3d(
+                x=df_dia['Dia'],
+                y=[idx_m] * len(df_dia),  # Posición fija en eje Y para dar la profundidad del mes
+                z=df_dia['Monto'],
+                mode='lines+markers+text',
+                name=f"Mes: {mes}",
+                text=textos,
+                textposition="top right",
+                textfont=dict(color=color_mes, size=14),
+                line=dict(color=color_mes, width=6),
+                marker=dict(size=5, color=color_mes, symbol='circle'),
+                hovertemplate=f"<b>Mes: {mes}</b><br>Día: %{{x}}<br>Ventas: $%{{z:,.2f}}<extra></extra>"
+            ))
+            
+        fig_linea_3d.update_layout(
+            paper_bgcolor=color_fondo_grafica,
+            plot_bgcolor=color_fondo_grafica,
+            font=dict(color="#f1f5f9", family="sans-serif"),
+            scene=dict(
+                xaxis=dict(title='Día del Mes', backgroundcolor="#0f172a", gridcolor="#23324a", showbackground=True),
+                yaxis=dict(
+                    title='Secuencia de Mes',
+                    tickvals=list(range(len(meses_en_datos))),
+                    ticktext=meses_en_datos,
+                    backgroundcolor="#0f172a",
+                    gridcolor="#23324a",
+                    showbackground=True
+                ),
+                zaxis=dict(title='Ventas ($)', backgroundcolor="#0f172a", gridcolor="#23324a", showbackground=True),
+                camera=dict(
+                    eye=dict(x=-1.6, y=-1.6, z=0.8) # Ángulo tridimensional óptimo
                 )
-                fig_barras.update_traces(
-                    textposition='outside',
-                    marker_line_color='#ffffff',
-                    marker_line_width=1.5,
-                    opacity=0.95
-                )
-                fig_barras.update_layout(
-                    showlegend=False,
-                    paper_bgcolor=color_fondo_grafica,
-                    plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f1f5f9", family="sans-serif", size=13),
-                    xaxis=dict(showgrid=True, gridcolor='#23324a', linecolor='#334155'),
-                    yaxis=dict(showgrid=False, linecolor='#334155'),
-                    margin=dict(l=20, r=20, t=30, b=20)
-                )
-                st.plotly_chart(fig_barras, use_container_width=True)
-
-    with col_right:
-        with st.container(border=True):
-            st.subheader("🍩 Distribución Porcentual por Categoría")
-            if 'Categoria' in df_filtrado.columns:
-                ventas_cat = df_filtrado.groupby('Categoria')['Monto'].sum().reset_index()
-                
-                fig_donut = px.pie(
-                    ventas_cat,
-                    names='Categoria',
-                    values='Monto',
-                    hole=0.5,
-                    color='Categoria',
-                    color_discrete_map=COLORES_CATEGORIAS,
-                    template="plotly_dark"
-                )
-                fig_donut.update_traces(
-                    textinfo='percent+label',
-                    textfont_size=13,
-                    marker=dict(line=dict(color='#080b10', width=3))
-                )
-                fig_donut.update_layout(
-                    paper_bgcolor=color_fondo_grafica,
-                    plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f1f5f9", family="sans-serif"),
-                    showlegend=False,
-                    margin=dict(l=20, r=20, t=30, b=20)
-                )
-                st.plotly_chart(fig_donut, use_container_width=True)
+            ),
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=0.95,
+                xanchor="center",
+                x=0.5
+            ),
+            margin=dict(l=10, r=10, t=30, b=20)
+        )
+        
+        st.plotly_chart(fig_linea_3d, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Ranking de Categorías (Circular 3D) & Top 10 Conceptos (Horizontal) ---
+    # --- FILA 2: Ranking Categorías 3D & Top 10 Conceptos (Horizontal) ---
     col_cat, col_conc = st.columns(2)
 
     with col_cat:
@@ -282,15 +297,12 @@ else:
             st.subheader("🌐 Ranking 3D de Categorías más Vendidas")
             if 'Categoria' in df_filtrado.columns:
                 top_cat = df_filtrado.groupby('Categoria')['Monto'].sum().reset_index().sort_values('Monto', ascending=False)
-                
-                # Asignar colores específicos por categoría
                 colores_lista = [COLORES_CATEGORIAS.get(c, '#00f2fe') for c in top_cat['Categoria']]
                 
-                # Gráfica Circular con efecto 3D elevado y desfasado (pull)
                 fig_3d = go.Figure(data=[go.Pie(
                     labels=top_cat['Categoria'],
                     values=top_cat['Monto'],
-                    pull=[0.1, 0.05, 0.05, 0.05, 0.05], # Eleva las rebanadas dando sensación 3D flotante
+                    pull=[0.1, 0.05, 0.05, 0.05, 0.05],
                     marker=dict(
                         colors=colores_lista,
                         line=dict(color='#080b10', width=3)
