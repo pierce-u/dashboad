@@ -181,7 +181,7 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. PALETAS
+# 7. PALETAS Y ESTILOS
 color_fondo_grafica = "#1e293b"
 
 COLORES_MESES = {
@@ -251,7 +251,7 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Ranking Categorías 3D & Treemap de Conceptos ---
+    # --- FILA 2: Ranking Categorías 3D & Lollipop Chart Neón ---
     col_cat, col_conc = st.columns(2)
 
     with col_cat:
@@ -295,35 +295,65 @@ else:
 
     with col_conc:
         with st.container(border=True):
-            st.subheader("🧩 Mapa Proporcional de Conceptos (Treemap)")
+            st.subheader("🍭 Top 10 Conceptos más Vendidos (Lollipop)")
             if 'Concepto' in df_filtrado.columns:
                 top10_conceptos = (
-                    df_filtrado.groupby(['Categoria', 'Concepto'])['Monto']
+                    df_filtrado.groupby('Concepto')['Monto']
                     .sum()
+                    .nlargest(10)
                     .reset_index()
+                    .sort_values('Monto', ascending=True)
                 )
                 
-                fig_treemap = px.treemap(
-                    top10_conceptos,
-                    path=['Categoria', 'Concepto'],
-                    values='Monto',
-                    color='Monto',
-                    color_continuous_scale=['#8338ec', '#7000ff', '#f107a3', '#00f2fe']
-                )
-                
-                fig_treemap.update_traces(
-                    texttemplate='<b>%{label}</b><br>$%{value:,.0f}',
-                    marker=dict(cornerradius=6, pad=dict(t=25, l=4, r=4, b=4))
-                )
-                
-                fig_treemap.update_layout(
+                fig_lollipop = go.Figure()
+
+                # Líneas horizontales estilizadas
+                for i, row in top10_conceptos.iterrows():
+                    fig_lollipop.add_trace(go.Scatter(
+                        x=[0, row['Monto']],
+                        y=[row['Concepto'], row['Concepto']],
+                        mode='lines',
+                        line=dict(color='#3b82f6', width=3),
+                        showlegend=False,
+                        hoverinfo='skip'
+                    ))
+
+                # Puntos/Círculos Neón en los extremos con los montos
+                fig_lollipop.add_trace(go.Scatter(
+                    x=top10_conceptos['Monto'],
+                    y=top10_conceptos['Concepto'],
+                    mode='markers+text',
+                    marker=dict(
+                        color='#00f2fe',
+                        size=20,
+                        line=dict(color='#ffffff', width=2)
+                    ),
+                    text=[f"  <b>${v/1000:.1f}k</b>" for v in top10_conceptos['Monto']],
+                    textposition="middle right",
+                    textfont=dict(color="#00f2fe", size=12),
+                    name='Ventas',
+                    hovertemplate="<b>%{y}</b><br>Monto: $%{-x:,.2f}<extra></extra>"
+                ))
+
+                # Ajustar margen x para que no se recorte el texto del último elemento
+                max_val = top10_conceptos['Monto'].max() * 1.25
+
+                fig_lollipop.update_layout(
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f8fafc", family="sans-serif", size=13),
-                    coloraxis_showscale=False,
-                    margin=dict(l=10, r=10, t=20, b=10)
+                    font=dict(color="#f8fafc", family="sans-serif", size=12),
+                    xaxis=dict(
+                        showgrid=True, 
+                        gridcolor='#334155', 
+                        linecolor='#475569',
+                        range=[0, max_val]
+                    ),
+                    yaxis=dict(showgrid=False, linecolor='#475569'),
+                    margin=dict(l=20, r=40, t=30, b=20),
+                    showlegend=False
                 )
-                st.plotly_chart(fig_treemap, use_container_width=True)
+                
+                st.plotly_chart(fig_lollipop, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
