@@ -10,38 +10,26 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Efecto Relieve 3D y Alto Contraste
+# 2. Estilos CSS
 st.markdown("""
     <style>
-    /* Fondo principal del dashboard */
-    .stApp {
-        background-color: #030712;
-        color: #f8fafc;
-    }
+    .stApp { background-color: #030712; color: #f8fafc; }
+    section[data-testid="stSidebar"] { background-color: #0b0f19; border-right: 1px solid #1e293b; }
     
-    /* Barra lateral */
-    section[data-testid="stSidebar"] {
-        background-color: #0b0f19;
-        border-right: 1px solid #1e293b;
-    }
-    
-    /*Tarjetas de Métricas con Relieve 3D */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #131d31, #0c1322);
         border: 1px solid #334155;
-        border-top: 1px solid #475569; /* Luz superior para relieve */
+        border-top: 1px solid #475569;
         border-left: 1px solid #475569;
         border-radius: 16px;
         padding: 22px;
-        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.85), 
-                    inset 0 1px 2px rgba(255, 255, 255, 0.15);
+        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.85), inset 0 1px 2px rgba(255, 255, 255, 0.15);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
     div[data-testid="stMetric"]:hover {
         transform: translateY(-4px);
-        box-shadow: 0 18px 35px -5px rgba(0, 0, 0, 0.95), 
-                    0 0 25px rgba(0, 242, 254, 0.4);
+        box-shadow: 0 18px 35px -5px rgba(0, 0, 0, 0.95), 0 0 25px rgba(0, 242, 254, 0.4);
         border-color: #00f2fe;
     }
 
@@ -60,16 +48,14 @@ st.markdown("""
         text-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
     }
     
-    /* Contenedores / Cuadros de las Gráficas con Relieve 3D */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
         background: linear-gradient(145deg, #0f172a, #090e1a) !important;
         border: 1px solid #2d3d54 !important;
-        border-top: 1px solid #475569 !important; /* Bisel de luz superior */
-        border-left: 1px solid #475569 !important; /* Bisel de luz izquierdo */
+        border-top: 1px solid #475569 !important;
+        border-left: 1px solid #475569 !important;
         border-radius: 20px !important;
         padding: 22px !important;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.85), 
-                    inset 0 1px 2px rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.85), inset 0 1px 2px rgba(255, 255, 255, 0.1) !important;
     }
 
     h1 { color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
@@ -135,40 +121,37 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# MAPA Y CONFIGURACIÓN DE MESES
+# DICCIONARIO OFICIAL DE MESES Y SUS ÍNDICES
 MAPA_MESES = {
-    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
-    5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
-    9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+    'Enero': 1, 'Febrero': 2, 'Marzo': 3, 'Abril': 4,
+    'Mayo': 5, 'Junio': 6, 'Julio': 7, 'Agosto': 8,
+    'Septiembre': 9, 'Octubre': 10, 'Noviembre': 11, 'Diciembre': 12
 }
 
-MESES_CALENDARIO = list(MAPA_MESES.values())
+MESES_ORDENADOS = list(MAPA_MESES.keys())
 meses_detectados = df['Mes'].unique() if not df.empty else []
-meses_disponibles = [m for m in MESES_CALENDARIO if m in meses_detectados]
+meses_disponibles = [m for m in MESES_ORDENADOS if m in meses_detectados]
 
 # 4. BARRA LATERAL
 st.sidebar.title("🎛️ Panel de Control")
 
-# Selector de Fechas
 fecha_min_def = pd.to_datetime("2026-01-01").date()
 fecha_max_def = pd.to_datetime("2026-12-31").date()
 
 st.sidebar.subheader("📅 Rango de Fechas")
 rango_fechas = st.sidebar.date_input(
     "Seleccionar Rango:",
-    value=(fecha_min_def, pd.to_datetime("2026-02-28").date()),
+    value=(fecha_min_def, pd.to_datetime("2026-03-31").date()),
     min_value=fecha_min_def,
     max_value=fecha_max_def
 )
 
-# Selector Multiselect de Meses
 meses_seleccionados = st.sidebar.multiselect(
-    "📆 Seleccionar Mes(es) Manualmente:",
+    "📆 Seleccionar Rango de Meses:",
     options=meses_disponibles,
     default=[]
 )
 
-# Selector de Categorías
 categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']) if not df.empty else []
 
 categorias_seleccionadas = st.sidebar.multiselect(
@@ -177,19 +160,25 @@ categorias_seleccionadas = st.sidebar.multiselect(
     default=categorias_disponibles
 )
 
-# 5. APLICAR FILTROS LÓGICOS
+# 5. LÓGICA DE RANGO CONTINUO DE MESES
 df_filtrado = df.copy()
 
-# A) Si el usuario elige meses explícitamente, se usa ese filtro
-if meses_seleccionados and 'Mes' in df_filtrado.columns:
-    df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_seleccionados)]
-# B) Si no hay meses elegidos manualmente, se procesa el rango del Selector de Fechas por mes
-elif isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
-    f_inicio, f_fin = rango_fechas
-    meses_incluidos = [MAPA_MESES[m] for m in range(f_inicio.month, f_fin.month + 1) if m in MAPA_MESES]
-    df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_incluidos)]
+if meses_seleccionados:
+    # Obtener los índices numéricos de los meses seleccionados
+    indices = [MAPA_MESES[m] for m in meses_seleccionados if m in MAPA_MESES]
+    if indices:
+        idx_min = min(indices)
+        idx_max = max(indices)
+        # Crear la lista continua entre el mes mínimo y el máximo seleccionados
+        meses_rango_continuo = [m for m, idx in MAPA_MESES.items() if idx_min <= idx <= idx_max]
+        df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_rango_continuo)]
+        meses_a_graficar = meses_rango_continuo
+    else:
+        meses_a_graficar = meses_disponibles
+else:
+    meses_a_graficar = meses_disponibles
 
-# C) Aplicar Categorías
+# Filtrar por Categorías
 if categorias_seleccionadas and 'Categoria' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
@@ -209,7 +198,7 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. VISUALIZACIONES Y GRÁFICAS COMPLETAS
+# 7. VISUALIZACIONES
 color_fondo_grafica = "#1e2d42"
 
 COLORES_MESES = {
@@ -230,15 +219,18 @@ COLORES_CATEGORIAS = {
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES ---
+    # --- FILA 1: TENDENCIA POR MES (CON SECUENCIA OBLIGATORIA) ---
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
         ventas_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-        meses_activos = [m for m in MESES_CALENDARIO if m in ventas_mes['Mes'].unique()]
         
-        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_activos, ordered=True)
-        ventas_mes = ventas_mes.sort_values('Mes').dropna(subset=['Mes'])
+        # Base de meses para rellenar incluso si un mes intermedio tuviera $0 ventas
+        base_meses = pd.DataFrame({'Mes': meses_a_graficar})
+        ventas_mes = pd.merge(base_meses, ventas_mes, on='Mes', how='left').fillna({'Monto': 0})
+        
+        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_a_graficar, ordered=True)
+        ventas_mes = ventas_mes.sort_values('Mes')
         
         fig_linea = go.Figure()
 
@@ -282,7 +274,7 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Ranking Categorías 3D & Lollipop Chart Neón ---
+    # --- FILA 2: Ranking Categorías & Lollipop Chart ---
     col_cat, col_conc = st.columns(2)
 
     with col_cat:
