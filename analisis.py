@@ -10,22 +10,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Fondo de Alto Contraste en 3 Niveles
+# 2. Inyección de CSS para Fondo de Alto Contraste
 st.markdown("""
     <style>
-    /* Nivel 1: Fondo General del Dashboard (Negro Carbón Profundo) */
     .stApp {
         background-color: #030712;
         color: #f8fafc;
     }
     
-    /* Barra lateral */
     section[data-testid="stSidebar"] {
         background-color: #0b0f19;
         border-right: 1px solid #1e293b;
     }
     
-    /* Nivel 2: Cajas de KPIs con relieve luminoso */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #0f172a, #131d33);
         border: 1px solid #334155;
@@ -58,7 +55,6 @@ st.markdown("""
         text-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
     }
     
-    /* Nivel 2: Cajas Contenedoras de los Gráficos */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
         background-color: #0f172a !important;
         border: 1px solid #283548 !important;
@@ -74,7 +70,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Cargar datos detectando dinámicamente cualquier pestaña
+# 3. Cargar datos
 @st.cache_data
 def cargar_datos():
     hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
@@ -86,8 +82,6 @@ def cargar_datos():
             
         df_hoja = df_hoja.copy()
         df_hoja.columns = df_hoja.columns.astype(str).str.strip()
-        
-        # Asignar el mes basándose en el nombre de la pestaña
         df_hoja['Mes'] = str(nombre_hoja).strip().capitalize()
         dfs.append(df_hoja)
         
@@ -187,8 +181,8 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. COLOR DEL LIENZO DEL GRÁFICO (NIVEL 3: GRIS AZULADO ELEVADO PARA ALTO CONTRASTE)
-color_fondo_grafica = "#1e293b" # Genera contraste directo con la caja #0f172a
+# 7. PALETAS
+color_fondo_grafica = "#1e293b"
 
 COLORES_MESES = {
     'Enero': '#00f2fe',
@@ -208,7 +202,7 @@ COLORES_CATEGORIAS = {
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: GRAFICA LINEAL TENDEICA POR MES ---
+    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES ---
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
@@ -257,7 +251,7 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Ranking Categorías 3D & Top 10 Conceptos (Horizontal) ---
+    # --- FILA 2: Ranking Categorías 3D & Treemap de Conceptos ---
     col_cat, col_conc = st.columns(2)
 
     with col_cat:
@@ -273,7 +267,7 @@ else:
                     pull=[0.08, 0.04, 0.04, 0.04, 0.04],
                     marker=dict(
                         colors=colores_lista,
-                        line=dict(color='#0f172a', width=3) # Borde oscuro para contrastar con #1e293b
+                        line=dict(color='#0f172a', width=3)
                     ),
                     textinfo='label+value',
                     texttemplate='%{label}<br><b>$%{value:,.0f}</b>',
@@ -293,7 +287,7 @@ else:
                         y=-0.2,
                         xanchor="center",
                         x=0.5,
-                        font=dict(color="#cbd5e1") # Leyenda legible
+                        font=dict(color="#cbd5e1")
                     ),
                     margin=dict(l=20, r=20, t=30, b=40)
                 )
@@ -301,44 +295,35 @@ else:
 
     with col_conc:
         with st.container(border=True):
-            st.subheader("🏆 Top 10 Conceptos más Vendidos")
+            st.subheader("🧩 Mapa Proporcional de Conceptos (Treemap)")
             if 'Concepto' in df_filtrado.columns:
                 top10_conceptos = (
-                    df_filtrado.groupby('Concepto')['Monto']
+                    df_filtrado.groupby(['Categoria', 'Concepto'])['Monto']
                     .sum()
-                    .nlargest(10)
                     .reset_index()
-                    .sort_values('Monto', ascending=True)
                 )
                 
-                fig_top10 = px.bar(
+                fig_treemap = px.treemap(
                     top10_conceptos,
-                    y='Concepto',
-                    x='Monto',
+                    path=['Categoria', 'Concepto'],
+                    values='Monto',
                     color='Monto',
-                    orientation='h',
-                    text_auto='.3s',
-                    labels={'Monto': 'Ventas ($)', 'Concepto': 'Concepto'},
-                    color_continuous_scale=['#f107a3', '#7000ff', '#38bdf8'],
-                    template="plotly_dark"
+                    color_continuous_scale=['#8338ec', '#7000ff', '#f107a3', '#00f2fe']
                 )
-                fig_top10.update_traces(
-                    textposition='outside',
-                    marker_line_color='#ffffff',
-                    marker_line_width=1.2,
-                    opacity=0.95
+                
+                fig_treemap.update_traces(
+                    texttemplate='<b>%{label}</b><br>$%{value:,.0f}',
+                    marker=dict(cornerradius=6, pad=dict(t=25, l=4, r=4, b=4))
                 )
-                fig_top10.update_layout(
-                    showlegend=False,
-                    coloraxis_showscale=False,
+                
+                fig_treemap.update_layout(
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f8fafc", family="sans-serif", size=12),
-                    xaxis=dict(showgrid=True, gridcolor='#334155', linecolor='#475569'),
-                    yaxis=dict(showgrid=False, linecolor='#475569'),
-                    margin=dict(l=20, r=20, t=30, b=20)
+                    font=dict(color="#f8fafc", family="sans-serif", size=13),
+                    coloraxis_showscale=False,
+                    margin=dict(l=10, r=10, t=20, b=10)
                 )
-                st.plotly_chart(fig_top10, use_container_width=True)
+                st.plotly_chart(fig_treemap, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
