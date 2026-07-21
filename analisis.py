@@ -120,7 +120,6 @@ def cargar_datos():
 
     df['Fecha_Texto'] = df['Fecha'].apply(corregir_fecha)
     df['Fecha'] = pd.to_datetime(df['Fecha_Texto'], dayfirst=True, errors='coerce')
-    df['Dia'] = df['Fecha'].dt.day
     
     if 'Categoria' in df.columns:
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
@@ -188,7 +187,7 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. PALETAS Y MAPAS DE COLORES NÉON / EJECUTIVOS
+# 7. MAPA DE COLORES VÍVIDOS Y NEÓN
 color_fondo_grafica = "#151e2e"
 
 COLORES_MESES = {
@@ -197,13 +196,7 @@ COLORES_MESES = {
     'Marzo': '#ffbe0b',      # Oro Neón
     'Abril': '#00f5d4',      # Verde Menta
     'Mayo': '#8338ec',      # Púrpura
-    'Junio': '#3a86ff',     # Azul Eléctrico
-    'Julio': '#ff006e',     # Rosa Neón
-    'Agosto': '#fb5607',    # Naranja Neón
-    'Septiembre': '#7000ff',# Violeta
-    'Octubre': '#38bdf8',   # Celeste
-    'Noviembre': '#f472b6', # Rosa Pastel
-    'Diciembre': '#a78bfa'  # Lavanda
+    'Junio': '#3a86ff'       # Azul
 }
 
 COLORES_CATEGORIAS = {
@@ -217,75 +210,55 @@ COLORES_CATEGORIAS = {
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: GRAFICA LINEAL 3D (TENDENCIA POR MES CON COLOR Y NOMBRE EN SERIE) ---
+    # --- FILA 1: GRAFICA LINEAL CLARA Y SENCILLA POR MES ---
     with st.container(border=True):
-        st.subheader("📈 Tendencia Lineal 3D de Ventas Diarias por Mes")
+        st.subheader("📈 Tendencia de Ventas por Mes")
         
-        fig_linea_3d = go.Figure()
+        # Agrupar total por mes manteniendo el orden cronológico
+        ventas_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
+        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_disponibles, ordered=True)
+        ventas_mes = ventas_mes.sort_values('Mes').dropna(subset=['Mes'])
         
-        # Filtrar meses ordenados presentes en el dataframe
-        meses_en_datos = [m for m in meses_disponibles if m in df_filtrado['Mes'].unique()]
-        
-        for idx_m, mes in enumerate(meses_en_datos):
-            df_m = df_filtrado[df_filtrado['Mes'] == mes]
-            if df_m.empty:
-                continue
-                
-            # Agrupar por día para obtener la tendencia temporal
-            df_dia = df_m.groupby('Dia')['Monto'].sum().reset_index().sort_values('Dia')
-            
-            color_mes = COLORES_MESES.get(mes, '#00f2fe')
-            
-            # Crear arreglo de textos para colocar el nombre del mes flotando en el último día
-            textos = [''] * len(df_dia)
-            if len(textos) > 0:
-                textos[-1] = f"<b> {mes}</b>"
-            
-            fig_linea_3d.add_trace(go.Scatter3d(
-                x=df_dia['Dia'],
-                y=[idx_m] * len(df_dia),  # Posición fija en eje Y para dar la profundidad del mes
-                z=df_dia['Monto'],
-                mode='lines+markers+text',
-                name=f"Mes: {mes}",
-                text=textos,
-                textposition="top right",
-                textfont=dict(color=color_mes, size=14),
-                line=dict(color=color_mes, width=6),
-                marker=dict(size=5, color=color_mes, symbol='circle'),
-                hovertemplate=f"<b>Mes: {mes}</b><br>Día: %{{x}}<br>Ventas: $%{{z:,.2f}}<extra></extra>"
-            ))
-            
-        fig_linea_3d.update_layout(
+        # Crear gráfico de línea claro
+        fig_linea = go.Figure()
+
+        # Dibujar la línea principal
+        fig_linea.add_trace(go.Scatter(
+            x=ventas_mes['Mes'],
+            y=ventas_mes['Monto'],
+            mode='lines+markers+text',
+            text=[f"<b>{m}</b><br>${v:,.0f}" for m, v in zip(ventas_mes['Mes'], ventas_mes['Monto'])],
+            textposition="top center",
+            textfont=dict(color="#ffffff", size=13),
+            line=dict(color="#00f2fe", width=4, shape='spline'), # Línea suavizada
+            marker=dict(
+                size=12,
+                color=[COLORES_MESES.get(m, '#00f2fe') for m in ventas_mes['Mes']], # Cada mes con su color
+                line=dict(color='#ffffff', width=2)
+            ),
+            hovertemplate="<b>%{x}</b><br>Ventas Totales: $%{-y:,.2f}<extra></extra>"
+        ))
+
+        fig_linea.update_layout(
             paper_bgcolor=color_fondo_grafica,
             plot_bgcolor=color_fondo_grafica,
             font=dict(color="#f1f5f9", family="sans-serif"),
-            scene=dict(
-                xaxis=dict(title='Día del Mes', backgroundcolor="#0f172a", gridcolor="#23324a", showbackground=True),
-                yaxis=dict(
-                    title='Secuencia de Mes',
-                    tickvals=list(range(len(meses_en_datos))),
-                    ticktext=meses_en_datos,
-                    backgroundcolor="#0f172a",
-                    gridcolor="#23324a",
-                    showbackground=True
-                ),
-                zaxis=dict(title='Ventas ($)', backgroundcolor="#0f172a", gridcolor="#23324a", showbackground=True),
-                camera=dict(
-                    eye=dict(x=-1.6, y=-1.6, z=0.8) # Ángulo tridimensional óptimo
-                )
+            xaxis=dict(
+                title="",
+                showgrid=False,
+                linecolor='#334155',
+                tickfont=dict(size=14, color="#f1f5f9")
             ),
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=0.95,
-                xanchor="center",
-                x=0.5
+            yaxis=dict(
+                title="Ventas ($)",
+                showgrid=True,
+                gridcolor='#23324a',
+                linecolor='#334155'
             ),
-            margin=dict(l=10, r=10, t=30, b=20)
+            margin=dict(l=20, r=20, t=40, b=20)
         )
-        
-        st.plotly_chart(fig_linea_3d, use_container_width=True)
+
+        st.plotly_chart(fig_linea, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
