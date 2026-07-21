@@ -1,4 +1,3 @@
-# Cambio de prueba 2026
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -44,7 +43,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Cargar datos con parseo estricto de fechas
+# 3. Cargar datos
 @st.cache_data
 def cargar_datos():
     hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
@@ -78,19 +77,6 @@ def cargar_datos():
         
     df = df.dropna(subset=['Monto'])
     
-    # Conversión robusta de la columna Fecha a datetime
-    def parsear_fecha(val):
-        if pd.isna(val):
-            return None
-        val_str = str(val).strip()
-        if '31/04/' in val_str or '31-04-' in val_str or '2026-04-31' in val_str:
-            val_str = val_str.replace('31/04/', '30/04/').replace('31-04-', '30-04-').replace('2026-04-31', '2026-04-30')
-        return val_str
-
-    df['Fecha_Limpia'] = df['Fecha'].apply(parsear_fecha)
-    # Parsear a datetime aceptando día/mes/año o año-mes-día
-    df['Fecha_DT'] = pd.to_datetime(df['Fecha_Limpia'], errors='coerce', dayfirst=True)
-    
     if 'Categoria' in df.columns:
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
         df = df[df['Categoria'].str.lower() != 'nan']
@@ -103,46 +89,36 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# --- DEFINICIÓN DE OPCIONES ---
-MESES_ORDEN = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-]
+# Diccionario para mapear números de mes a nombres de hojas
+MAPA_MESES = {
+    1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+    5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+    9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+}
+
+MESES_ORDEN = list(MAPA_MESES.values())
 meses_disponibles = [m for m in MESES_ORDEN if m in df['Mes'].unique()]
-
-fecha_min_data = df['Fecha_DT'].min().date() if not df.empty else pd.to_datetime("2026-01-01").date()
-fecha_max_data = df['Fecha_DT'].max().date() if not df.empty else pd.to_datetime("2026-12-31").date()
-
-# --- INICIALIZAR SESSION STATE ---
-if 'filtro_fechas' not in st.session_state:
-    st.session_state.filtro_fechas = (fecha_min_data, fecha_max_data)
-
-if 'filtro_meses' not in st.session_state:
-    st.session_state.filtro_meses = []
-
-# --- CALLBACKS DE EXCLUSIÓN MUTUA ---
-def al_cambiar_fecha():
-    st.session_state.filtro_meses = []
-
-def al_cambiar_meses():
-    st.session_state.filtro_fechas = (fecha_min_data, fecha_max_data)
 
 # 4. BARRA LATERAL
 st.sidebar.title("🎛️ Panel de Control")
 
+# Rango de fechas por defecto
+fecha_min_def = pd.to_datetime("2026-01-01").date()
+fecha_max_def = pd.to_datetime("2026-12-31").date()
+
+st.sidebar.subheader("📅 Rango de Fechas")
 rango_fechas = st.sidebar.date_input(
-    "📅 Rango de Fechas:",
-    key='filtro_fechas',
-    min_value=fecha_min_data,
-    max_value=fecha_max_data,
-    on_change=al_cambiar_fecha
+    "Seleccionar Rango:",
+    value=(fecha_min_def, pd.to_datetime("2026-02-28").date()),
+    min_value=fecha_min_def,
+    max_value=fecha_max_def
 )
 
+# Filtro explícito de meses
 meses_seleccionados = st.sidebar.multiselect(
-    "📆 Seleccionar Mes(es):",
+    "📆 Seleccionar Mes(es) Manualmente:",
     options=meses_disponibles,
-    key='filtro_meses',
-    on_change=al_cambiar_meses
+    default=[]
 )
 
 categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan'])
@@ -152,22 +128,26 @@ categorias_seleccionadas = st.sidebar.multiselect(
     default=categorias_disponibles
 )
 
-# 5. LÓGICA DE FILTRADO ESTRICTA
+# 5. LÓGICA DE FILTRADO ROBUSTA
 df_filtrado = df.copy()
 
-# A) Si seleccionó meses explícitamente:
+# Regla 1: Si el usuario selecciona meses manualmente, se prioriza el multiselect
 if meses_seleccionados:
     df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_seleccionados)]
-# B) Si no hay meses seleccionados, aplicar ESTRICTAMENTE el filtro por Fecha
+# Regla 2: Si NO seleccionó meses manualmente, el Rango de Fechas calcula automáticamente qué meses incluir
 elif isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
     f_inicio, f_fin = rango_fechas
-    # Comparación estricta de objetos date
-    df_filtrado = df_filtrado[
-        (df_filtrado['Fecha_DT'].dt.date >= f_inicio) & 
-        (df_filtrado['Fecha_DT'].dt.date <= f_fin)
-    ]
+    
+    # Extraer todos los números de mes que entran en el rango de fecha
+    num_mes_inicio = f_inicio.month
+    num_mes_fin = f_fin.month
+    
+    meses_incluidos = [MAPA_MESES[m] for m in range(num_mes_inicio, num_mes_fin + 1) if m in MAPA_MESES]
+    
+    # Filtrar el DataFrame según las hojas de esos meses
+    df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_incluidos)]
 
-# C) Filtrar Categorías
+# Regla 3: Filtrar categorías
 if categorias_seleccionadas:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
@@ -186,23 +166,23 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. VISUALIZACIÓN DE TENDENCIA POR MES
+# 7. TENDENCIA DE VENTAS POR MES
 color_fondo_grafica = "#1e2d42"
 COLORES_MESES = {'Enero': '#00f2fe', 'Febrero': '#ff007f', 'Marzo': '#ffbe0b', 'Abril': '#00f5d4'}
 
 if df_filtrado.empty:
-    st.warning("⚠️ No hay datos para el rango o combinación de filtros seleccionada.")
+    st.warning("⚠️ No hay datos para el filtro seleccionado.")
 else:
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
-        # Agrupar únicamente los datos que sobrevivieron al filtro
+        # Agrupar solo los meses filtrados
         ventas_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
         
-        # Filtrar la lista de meses para que SOLO incluya los meses presentes tras el filtrado
-        meses_filtrados = [m for m in MESES_ORDEN if m in ventas_mes['Mes'].unique()]
+        # Mantener únicamente los meses presentes en los datos filtrados
+        meses_activos = [m for m in MESES_ORDEN if m in ventas_mes['Mes'].unique()]
         
-        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_filtrados, ordered=True)
+        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_activos, ordered=True)
         ventas_mes = ventas_mes.sort_values('Mes').dropna()
 
         fig_linea = go.Figure()
@@ -229,7 +209,7 @@ else:
             font=dict(color="#f8fafc", family="sans-serif"),
             xaxis=dict(
                 title="",
-                type='category', # Asegura que Plotly no rellene los meses ausentes
+                type='category',
                 showgrid=False,
                 linecolor='#475569',
                 tickfont=dict(size=14, color="#f8fafc")
@@ -247,6 +227,5 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Detalle en tabla
     with st.expander("📄 Detalle de Registro de Operaciones"):
         st.dataframe(df_filtrado, use_container_width=True)
