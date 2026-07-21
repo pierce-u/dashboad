@@ -24,7 +24,7 @@ st.markdown("""
         border-right: 1px solid #1f2937;
     }
     
-    /* Tarjetas de Métricas (KPIs) con relieve contrastado */
+    /* Tarjetas de Métricas (KPIs) */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #182030, #111622);
         border: 1px solid #2d3748;
@@ -73,7 +73,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Cargar datos detectando dinámicamente cualquier pestaña que exista en el Excel
+# 3. Cargar datos detectando dinámicamente cualquier pestaña
 @st.cache_data
 def cargar_datos():
     hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
@@ -99,7 +99,8 @@ def cargar_datos():
         'Monto en dólares': 'Monto',
         'monto en dólares': 'Monto',
         'Categoría': 'Categoria',
-        'categoría': 'Categoria'
+        'categoría': 'Categoria',
+        'concepto': 'Concepto'
     }
     df.rename(columns=renombres, inplace=True)
     
@@ -131,7 +132,7 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# 4. BARRA LATERAL - Ordenamiento inteligente de los meses presentes
+# 4. BARRA LATERAL
 st.sidebar.title("🎛️ Panel de Control")
 
 MESES_CALENDARIO = [
@@ -185,7 +186,7 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS CON FONDO CONTRASTADO (#182232)
+# 7. GRÁFICOS
 color_fondo_grafica = "#182232"
 
 paleta_barras = ['#38bdf8', '#818cf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24']
@@ -194,6 +195,7 @@ paleta_pie = ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa']
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
+    # --- FILA 1: Ventas por Mes y Proporción por Categoría ---
     col_left, col_right = st.columns(2)
     
     with col_left:
@@ -201,7 +203,6 @@ else:
             st.subheader("📊 Rendimiento de Ventas por Mes")
             if 'Mes' in df_filtrado.columns:
                 ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-                
                 ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=meses_disponibles, ordered=True)
                 ventas_por_mes = ventas_por_mes.sort_values('Mes').dropna(subset=['Mes'])
                 
@@ -230,7 +231,6 @@ else:
                     yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
-                
                 st.plotly_chart(fig_barras, use_container_width=True)
 
     with col_right:
@@ -260,5 +260,89 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
+    # --- FILA 2: Ranking de Categorías & Top 10 Conceptos ---
+    col_cat, col_conc = st.columns(2)
+
+    with col_cat:
+        with st.container(border=True):
+            st.subheader("📂 Top Categorías más Vendidas")
+            if 'Categoria' in df_filtrado.columns:
+                top_categorias = (
+                    df_filtrado.groupby('Categoria')['Monto']
+                    .sum()
+                    .nlargest(10)
+                    .reset_index()
+                )
+                
+                fig_cat = px.bar(
+                    top_categorias,
+                    x='Categoria',
+                    y='Monto',
+                    color='Monto',
+                    text_auto='.3s',
+                    labels={'Monto': 'Ventas ($)', 'Categoria': 'Categoría'},
+                    color_continuous_scale='Tealgrn',
+                    template="plotly_dark"
+                )
+                fig_cat.update_traces(
+                    textposition='outside',
+                    marker_line_color='#ffffff',
+                    marker_line_width=1.2,
+                    opacity=0.95
+                )
+                fig_cat.update_layout(
+                    showlegend=False,
+                    coloraxis_showscale=False,
+                    paper_bgcolor=color_fondo_grafica,
+                    plot_bgcolor=color_fondo_grafica,
+                    font=dict(color="#e2e8f0", family="sans-serif"),
+                    xaxis=dict(showgrid=False, linecolor='#334155'),
+                    yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
+                    margin=dict(l=20, r=20, t=30, b=30)
+                )
+                st.plotly_chart(fig_cat, use_container_width=True)
+
+    with col_conc:
+        with st.container(border=True):
+            st.subheader("🏆 Top 10 Conceptos más Vendidos")
+            if 'Concepto' in df_filtrado.columns:
+                top10_conceptos = (
+                    df_filtrado.groupby('Concepto')['Monto']
+                    .sum()
+                    .nlargest(10)
+                    .reset_index()
+                )
+                
+                fig_top10 = px.bar(
+                    top10_conceptos,
+                    x='Concepto',
+                    y='Monto',
+                    color='Monto',
+                    text_auto='.3s',
+                    labels={'Monto': 'Ventas ($)', 'Concepto': 'Concepto / Producto'},
+                    color_continuous_scale='Blues',
+                    template="plotly_dark"
+                )
+                fig_top10.update_traces(
+                    textposition='outside',
+                    marker_line_color='#ffffff',
+                    marker_line_width=1.2,
+                    opacity=0.95
+                )
+                fig_top10.update_layout(
+                    showlegend=False,
+                    coloraxis_showscale=False,
+                    paper_bgcolor=color_fondo_grafica,
+                    plot_bgcolor=color_fondo_grafica,
+                    font=dict(color="#e2e8f0", family="sans-serif"),
+                    xaxis=dict(showgrid=False, linecolor='#334155', tickangle=-25),
+                    yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
+                    margin=dict(l=20, r=20, t=30, b=30)
+                )
+                st.plotly_chart(fig_top10, use_container_width=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Tabla de detalle
     with st.expander("📄 Detalle de Registro de Operaciones"):
         st.dataframe(df_filtrado, use_container_width=True)
