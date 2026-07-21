@@ -9,35 +9,25 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Cargar datos con limpieza automática de encabezados
+# 2. Cargar datos con mapeo exacto de tus columnas
 @st.cache_data
 def cargar_datos():
     df = pd.read_excel("ventas_ficticias_Q1_2026.xlsx")
     
-    # Limpiar espacios en blanco invisibles al inicio o final de los encabezados
+    # Limpiar espacios invisibles al inicio o final de los encabezados
     df.columns = df.columns.astype(str).str.strip()
     
-    # Detectar columna de valores/ventas dinámicamente
-    columna_monto = None
-    posibles_monto = ['Monto', 'Ventas', 'Total', 'Precio', 'Monto_Total', 'monto', 'ventas']
-    for col in posibles_monto:
-        if col in df.columns:
-            columna_monto = col
-            break
-            
-    if columna_monto:
-        df.rename(columns={columna_monto: 'Monto'}, inplace=True)
-        
-    # Detectar columna de Fecha dinámicamente
-    columna_fecha = None
-    posibles_fecha = ['Fecha', 'fecha', 'Date', 'date']
-    for col in posibles_fecha:
-        if col in df.columns:
-            columna_fecha = col
-            break
-            
-    if columna_fecha:
-        df.rename(columns={columna_fecha: 'Fecha'}, inplace=True)
+    # Renombrar columnas para que coincidan con la estructura del dashboard
+    renombres = {
+        'Monto en dólares': 'Monto',
+        'monto en dólares': 'Monto',
+        'Categoría': 'Categoria',
+        'categoría': 'Categoria'
+    }
+    df.rename(columns=renombres, inplace=True)
+    
+    # Procesar Fecha y Mes
+    if 'Fecha' in df.columns:
         df['Fecha'] = pd.to_datetime(df['Fecha'])
         
         meses_map = {
@@ -45,18 +35,10 @@ def cargar_datos():
             5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
             9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
         }
+        # Sobrescribir/crear la columna Mes formateada en español
         df['Mes'] = df['Fecha'].dt.month.map(meses_map)
-    
-    # Detectar columna de Categoria dinámicamente
-    columna_cat = None
-    posibles_cat = ['Categoria', 'Categoría', 'categoria', 'categoría', 'Category']
-    for col in posibles_cat:
-        if col in df.columns:
-            columna_cat = col
-            break
-            
-    if columna_cat:
-        df.rename(columns={columna_cat: 'Categoria'}, inplace=True)
+        
+    if 'Categoria' in df.columns:
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
         
     return df
@@ -65,11 +47,6 @@ try:
     df = cargar_datos()
 except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
-    st.stop()
-
-# Validación visual por si la columna no existe en el Excel
-if 'Monto' not in df.columns:
-    st.error(f"❌ No se encontró la columna 'Monto'. Las columnas detectadas en tu Excel son: `{list(df.columns)}`")
     st.stop()
 
 # 3. BARRA LATERAL (Panel de Control)
