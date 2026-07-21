@@ -9,37 +9,37 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Fondo Contrastado y Tarjetas Flotantes
+# 2. Inyección de CSS para Fondo Contrastado, Tarjetas Flotantes y Títulos Neón
 st.markdown("""
     <style>
     /* Fondo general del Dashboard */
     .stApp {
-        background-color: #0b0e14;
-        color: #e0e6ed;
+        background-color: #080b10;
+        color: #f1f5f9;
     }
     
     /* Barra lateral */
     section[data-testid="stSidebar"] {
-        background-color: #121721;
-        border-right: 1px solid #1f2937;
+        background-color: #0f172a;
+        border-right: 1px solid #1e293b;
     }
     
-    /* Tarjetas de Métricas (KPIs) */
+    /* Tarjetas de Métricas (KPIs) con relieve luminoso */
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #182030, #111622);
-        border: 1px solid #2d3748;
-        border-radius: 14px;
-        padding: 20px;
-        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
-                    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+        background: linear-gradient(135deg, #131b2e, #0d1322);
+        border: 1px solid #2d3854;
+        border-radius: 16px;
+        padding: 22px;
+        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.7), 
+                    inset 0 1px 1px rgba(255, 255, 255, 0.1);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
     div[data-testid="stMetric"]:hover {
         transform: translateY(-3px);
-        box-shadow: 0 14px 30px -5px rgba(0, 0, 0, 0.7), 
-                    0 0 15px rgba(56, 189, 248, 0.2);
-        border-color: #38bdf8;
+        box-shadow: 0 14px 32px -5px rgba(0, 0, 0, 0.8), 
+                    0 0 20px rgba(0, 242, 254, 0.25);
+        border-color: #00f2fe;
     }
 
     div[data-testid="stMetric"] label {
@@ -47,23 +47,23 @@ st.markdown("""
         font-size: 0.85rem !important;
         font-weight: 700 !important;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
+        letter-spacing: 1px;
     }
     
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #38bdf8 !important;
-        font-size: 2rem !important;
+        color: #00f2fe !important;
+        font-size: 2.2rem !important;
         font-weight: 800 !important;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+        text-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
     }
     
-    /* Contenedores de Gráficos (Efecto Tarjeta Contrastada) */
+    /* Contenedores de Gráficos (Tarjetas Neón Contrastadas) */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
-        background-color: #151c28 !important;
-        border: 1px solid #2a3547 !important;
-        border-radius: 16px !important;
-        padding: 15px !important;
-        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.65), 
+        background-color: #111827 !important;
+        border: 1px solid #1f293d !important;
+        border-radius: 18px !important;
+        padding: 18px !important;
+        box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.7), 
                     inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
     }
 
@@ -186,16 +186,17 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS
-color_fondo_grafica = "#182232"
+# 7. GRÁFICOS (BARRAS HORIZONTALES CON PALETAS VÍVIDAS Y LLAMATIVAS)
+color_fondo_grafica = "#151e2e"
 
-paleta_barras = ['#38bdf8', '#818cf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24']
-paleta_pie = ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa']
+# Paletas de colores neón y super llamativas
+paleta_meses = ['#00f2fe', '#4facfe', '#7000ff', '#f107a3', '#ff007f', '#00f5d4']
+paleta_pie = ['#00f2fe', '#f107a3', '#ffbe0b', '#00f5d4', '#8338ec', '#ff006e']
 
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: Ventas por Mes y Proporción por Categoría ---
+    # --- FILA 1: Ventas por Mes (Horizontal) & Pie Chart Categorías ---
     col_left, col_right = st.columns(2)
     
     with col_left:
@@ -204,16 +205,17 @@ else:
             if 'Mes' in df_filtrado.columns:
                 ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
                 ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=meses_disponibles, ordered=True)
-                ventas_por_mes = ventas_por_mes.sort_values('Mes').dropna(subset=['Mes'])
+                ventas_por_mes = ventas_por_mes.sort_values('Mes', ascending=False).dropna(subset=['Mes'])
                 
                 fig_barras = px.bar(
                     ventas_por_mes,
-                    x='Mes',
-                    y='Monto',
+                    y='Mes',
+                    x='Monto',
                     color='Mes',
+                    orientation='h',
                     text_auto='.3s',
                     labels={'Monto': 'Ventas ($)', 'Mes': 'Mes'},
-                    color_discrete_sequence=paleta_barras,
+                    color_discrete_sequence=paleta_meses,
                     template="plotly_dark"
                 )
                 fig_barras.update_traces(
@@ -226,9 +228,9 @@ else:
                     showlegend=False,
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#e2e8f0", family="sans-serif"),
-                    xaxis=dict(showgrid=False, linecolor='#334155'),
-                    yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
+                    font=dict(color="#f1f5f9", family="sans-serif", size=13),
+                    xaxis=dict(showgrid=True, gridcolor='#23324a', linecolor='#334155'),
+                    yaxis=dict(showgrid=False, linecolor='#334155'),
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
                 st.plotly_chart(fig_barras, use_container_width=True)
@@ -247,12 +249,13 @@ else:
                 )
                 fig_pie.update_traces(
                     textinfo='percent+label',
-                    marker=dict(line=dict(color='#151c28', width=3))
+                    textfont_size=13,
+                    marker=dict(line=dict(color='#111827', width=3))
                 )
                 fig_pie.update_layout(
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#e2e8f0", family="sans-serif"),
+                    font=dict(color="#f1f5f9", family="sans-serif"),
                     showlegend=False,
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
@@ -260,28 +263,30 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Ranking de Categorías & Top 10 Conceptos ---
+    # --- FILA 2: Top Categorías & Top 10 Conceptos (Ambas en Barras Horizontales) ---
     col_cat, col_conc = st.columns(2)
 
     with col_cat:
         with st.container(border=True):
-            st.subheader("📂 Top Categorías más Vendidas")
+            st.subheader("📂 Ranking de Categorías más Vendidas")
             if 'Categoria' in df_filtrado.columns:
                 top_categorias = (
                     df_filtrado.groupby('Categoria')['Monto']
                     .sum()
                     .nlargest(10)
                     .reset_index()
+                    .sort_values('Monto', ascending=True)  # Para que el valor mayor quede arriba
                 )
                 
                 fig_cat = px.bar(
                     top_categorias,
-                    x='Categoria',
-                    y='Monto',
+                    y='Categoria',
+                    x='Monto',
                     color='Monto',
+                    orientation='h',
                     text_auto='.3s',
                     labels={'Monto': 'Ventas ($)', 'Categoria': 'Categoría'},
-                    color_continuous_scale='Tealgrn',
+                    color_continuous_scale=['#00f2fe', '#00f5d4', '#2ec4b6'],
                     template="plotly_dark"
                 )
                 fig_cat.update_traces(
@@ -295,10 +300,10 @@ else:
                     coloraxis_showscale=False,
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#e2e8f0", family="sans-serif"),
-                    xaxis=dict(showgrid=False, linecolor='#334155'),
-                    yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
-                    margin=dict(l=20, r=20, t=30, b=30)
+                    font=dict(color="#f1f5f9", family="sans-serif", size=13),
+                    xaxis=dict(showgrid=True, gridcolor='#23324a', linecolor='#334155'),
+                    yaxis=dict(showgrid=False, linecolor='#334155'),
+                    margin=dict(l=20, r=20, t=30, b=20)
                 )
                 st.plotly_chart(fig_cat, use_container_width=True)
 
@@ -311,16 +316,18 @@ else:
                     .sum()
                     .nlargest(10)
                     .reset_index()
+                    .sort_values('Monto', ascending=True)  # Para que el producto #1 quede arriba
                 )
                 
                 fig_top10 = px.bar(
                     top10_conceptos,
-                    x='Concepto',
-                    y='Monto',
+                    y='Concepto',
+                    x='Monto',
                     color='Monto',
+                    orientation='h',
                     text_auto='.3s',
-                    labels={'Monto': 'Ventas ($)', 'Concepto': 'Concepto / Producto'},
-                    color_continuous_scale='Blues',
+                    labels={'Monto': 'Ventas ($)', 'Concepto': 'Concepto'},
+                    color_continuous_scale=['#f107a3', '#7000ff', '#38bdf8'],
                     template="plotly_dark"
                 )
                 fig_top10.update_traces(
@@ -334,10 +341,10 @@ else:
                     coloraxis_showscale=False,
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#e2e8f0", family="sans-serif"),
-                    xaxis=dict(showgrid=False, linecolor='#334155', tickangle=-25),
-                    yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
-                    margin=dict(l=20, r=20, t=30, b=30)
+                    font=dict(color="#f1f5f9", family="sans-serif", size=12),
+                    xaxis=dict(showgrid=True, gridcolor='#23324a', linecolor='#334155'),
+                    yaxis=dict(showgrid=False, linecolor='#334155'),
+                    margin=dict(l=20, r=20, t=30, b=20)
                 )
                 st.plotly_chart(fig_top10, use_container_width=True)
 
