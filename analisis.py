@@ -141,7 +141,7 @@ fecha_max_def = pd.to_datetime("2026-12-31").date()
 st.sidebar.subheader("📅 Rango de Fechas")
 rango_fechas = st.sidebar.date_input(
     "Seleccionar Rango:",
-    value=(fecha_min_def, pd.to_datetime("2026-02-28").date()),
+    value=(fecha_min_def, pd.to_datetime("2026-03-31").date()),
     min_value=fecha_min_def,
     max_value=fecha_max_def
 )
@@ -160,19 +160,10 @@ categorias_seleccionadas = st.sidebar.multiselect(
     default=categorias_disponibles
 )
 
-# 5. APLICAR FILTROS LÓGICOS
+# 5. LÓGICA DE FILTRADO CORREGIDA (CÁLCULO EXACTO DE TOTALES)
 df_filtrado = df.copy()
 
-# A. Filtrar por Rango de Fechas
-if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
-    f_inicio, f_fin = rango_fechas
-    if 'Fecha' in df_filtrado.columns:
-        df_filtrado = df_filtrado[
-            (df_filtrado['Fecha'].dt.date >= f_inicio) & 
-            (df_filtrado['Fecha'].dt.date <= f_fin)
-        ]
-
-# B. Filtrar por Rango Continuo de Meses (Mantiene tu lógica intacta si el usuario selecciona meses)
+# Regla 1: Si hay meses seleccionados en el desplegable, los meses mandan (con su rango continuo)
 if meses_seleccionados:
     indices = [MAPA_MESES[m] for m in meses_seleccionados if m in MAPA_MESES]
     if indices:
@@ -180,26 +171,35 @@ if meses_seleccionados:
         meses_rango_continuo = [m for m, idx in MAPA_MESES.items() if idx_min <= idx <= idx_max]
         df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_rango_continuo)]
 
-# C. Filtrar por Categorías
+# Regla 2: Si NO seleccionó ningún mes manualmente, se aplica el filtro por Rango de Fechas
+elif isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
+    f_inicio, f_fin = rango_fechas
+    if 'Fecha' in df_filtrado.columns:
+        df_filtrado = df_filtrado[
+            (df_filtrado['Fecha'].dt.date >= f_inicio) & 
+            (df_filtrado['Fecha'].dt.date <= f_fin)
+        ]
+
+# Regla 3: Filtrar por Categorías siempre
 if categorias_seleccionadas and 'Categoria' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
-# Determinar los meses visibles dinámicamente para las gráficas
+# Determinar los meses que realmente están presentes en los datos filtrados
 if not df_filtrado.empty:
     meses_presentes = df_filtrado['Mes'].unique()
     meses_a_graficar = [m for m in MESES_ORDENADOS if m in meses_presentes]
 else:
     meses_a_graficar = []
 
-# 6. HEADER Y MÉTRICAS
+# 6. HEADER Y MÉTRICAS (CALCULADAS DIRECTAMENTE SOBRE LOS DATOS FILTRADOS)
 st.title("💼 Dashboard de Ventas Ejecutivas 2026")
 st.markdown("---")
 
 col1, col2, col3 = st.columns(3)
 
-total_ventas = df_filtrado['Monto'].sum() if not df_filtrado.empty else 0
+total_ventas = df_filtrado['Monto'].sum() if not df_filtrado.empty else 0.0
 total_ordenes = len(df_filtrado)
-ticket_promedio = df_filtrado['Monto'].mean() if not df_filtrado.empty else 0
+ticket_promedio = (total_ventas / total_ordenes) if total_ordenes > 0 else 0.0
 
 col1.metric("💰 Ventas Totales", f"${total_ventas:,.2f}")
 col2.metric("📦 Transacciones", f"{total_ordenes}")
