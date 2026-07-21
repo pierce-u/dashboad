@@ -9,26 +9,28 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Relieve, Sombras 3D y Estilo Ejecutivo
+# 2. Inyección de CSS para Fondo Contrastado y Tarjetas Flotantes
 st.markdown("""
     <style>
+    /* Fondo general del Dashboard */
     .stApp {
         background-color: #0b0e14;
         color: #e0e6ed;
     }
     
+    /* Barra lateral */
     section[data-testid="stSidebar"] {
         background-color: #121721;
         border-right: 1px solid #1f2937;
     }
     
+    /* Tarjetas de Métricas (KPIs) con relieve contrastado */
     div[data-testid="stMetric"] {
-        background: linear-gradient(145deg, #161c28, #10141d);
+        background: linear-gradient(145deg, #182030, #111622);
         border: 1px solid #2d3748;
         border-radius: 14px;
         padding: 20px;
         box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
-                    0 8px 10px -6px rgba(0, 0, 0, 0.5),
                     inset 0 1px 1px rgba(255, 255, 255, 0.08);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
@@ -55,8 +57,18 @@ st.markdown("""
         text-shadow: 0 2px 4px rgba(0,0,0,0.5);
     }
     
+    /* Contenedores de Gráficos (Efecto Tarjeta Contrastada) */
+    div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
+        background-color: #151c28 !important;
+        border: 1px solid #2a3547 !important;
+        border-radius: 16px !important;
+        padding: 15px !important;
+        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.65), 
+                    inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
+    }
+
     h1 { color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
-    h3 { color: #e2e8f0; font-size: 1.15rem !important; font-weight: 700; margin-bottom: 15px; }
+    h3 { color: #38bdf8; font-size: 1.15rem !important; font-weight: 700; margin-bottom: 15px; }
     hr { border-color: #1e293b; }
     </style>
 """, unsafe_allow_html=True)
@@ -74,7 +86,7 @@ def cargar_datos():
         df_hoja = df_hoja.copy()
         df_hoja.columns = df_hoja.columns.astype(str).str.strip()
         
-        # Asignar el mes basándose en el nombre de la pestaña (Enero, Febrero, Mayo, etc.)
+        # Asignar el mes basándose en el nombre de la pestaña
         df_hoja['Mes'] = str(nombre_hoja).strip().capitalize()
         dfs.append(df_hoja)
         
@@ -91,13 +103,11 @@ def cargar_datos():
     }
     df.rename(columns=renombres, inplace=True)
     
-    # Excluir filas de resumen/totales
     if 'Concepto' in df.columns:
         df = df[df['Concepto'].astype(str).str.strip().str.lower() != 'total']
         
     df = df.dropna(subset=['Monto'])
     
-    # Corregir incongruencias de días en meses (ej. 31/04)
     def corregir_fecha(val):
         if pd.isna(val):
             return val
@@ -124,17 +134,14 @@ except Exception as e:
 # 4. BARRA LATERAL - Ordenamiento inteligente de los meses presentes
 st.sidebar.title("🎛️ Panel de Control")
 
-# Lista de referencia para ordenar meses cronológicamente
 MESES_CALENDARIO = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ]
 
-# Detectar automáticamente cuáles de los 12 meses están presentes en el Excel
 meses_detectados = df['Mes'].unique() if not df.empty else []
 meses_disponibles = [m for m in MESES_CALENDARIO if m in meses_detectados]
 
-# Agregar cualquier pestaña con nombre personalizado que no esté en el calendario
 for m in meses_detectados:
     if m not in meses_disponibles:
         meses_disponibles.append(m)
@@ -178,7 +185,9 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS
+# 7. GRÁFICOS CON FONDO CONTRASTADO (#182232)
+color_fondo_grafica = "#182232"
+
 paleta_barras = ['#38bdf8', '#818cf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24']
 paleta_pie = ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa']
 
@@ -193,7 +202,6 @@ else:
             if 'Mes' in df_filtrado.columns:
                 ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
                 
-                # Ordenar dinámicamente según la secuencia cronológica
                 ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=meses_disponibles, ordered=True)
                 ventas_por_mes = ventas_por_mes.sort_values('Mes').dropna(subset=['Mes'])
                 
@@ -211,15 +219,15 @@ else:
                     textposition='outside',
                     marker_line_color='#ffffff',
                     marker_line_width=1.5,
-                    opacity=0.9
+                    opacity=0.95
                 )
                 fig_barras.update_layout(
                     showlegend=False,
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color="#cbd5e1", family="sans-serif"),
+                    paper_bgcolor=color_fondo_grafica,
+                    plot_bgcolor=color_fondo_grafica,
+                    font=dict(color="#e2e8f0", family="sans-serif"),
                     xaxis=dict(showgrid=False, linecolor='#334155'),
-                    yaxis=dict(showgrid=True, gridcolor='#1e293b', linecolor='#334155'),
+                    yaxis=dict(showgrid=True, gridcolor='#263346', linecolor='#334155'),
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
                 
@@ -239,12 +247,12 @@ else:
                 )
                 fig_pie.update_traces(
                     textinfo='percent+label',
-                    marker=dict(line=dict(color='#0b0e14', width=3))
+                    marker=dict(line=dict(color='#151c28', width=3))
                 )
                 fig_pie.update_layout(
-                    paper_bgcolor='rgba(0,0,0,0)',
-                    plot_bgcolor='rgba(0,0,0,0)',
-                    font=dict(color="#cbd5e1", family="sans-serif"),
+                    paper_bgcolor=color_fondo_grafica,
+                    plot_bgcolor=color_fondo_grafica,
+                    font=dict(color="#e2e8f0", family="sans-serif"),
                     showlegend=False,
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
