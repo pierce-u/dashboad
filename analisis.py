@@ -9,15 +9,15 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Cargar datos con mapeo exacto de tus columnas
+# 2. Cargar datos con limpieza estricta de nulos
 @st.cache_data
 def cargar_datos():
     df = pd.read_excel("ventas_ficticias_Q1_2026.xlsx")
     
-    # Limpiar espacios invisibles al inicio o final de los encabezados
+    # Limpiar espacios en blanco al inicio o final de los encabezados
     df.columns = df.columns.astype(str).str.strip()
     
-    # Renombrar columnas para que coincidan con la estructura del dashboard
+    # Renombrar columnas clave
     renombres = {
         'Monto en dólares': 'Monto',
         'monto en dólares': 'Monto',
@@ -26,20 +26,25 @@ def cargar_datos():
     }
     df.rename(columns=renombres, inplace=True)
     
+    # Eliminar filas donde la fecha o el monto sean nulos/vacíos
+    df = df.dropna(subset=['Fecha', 'Monto'])
+    
     # Procesar Fecha y Mes
-    if 'Fecha' in df.columns:
-        df['Fecha'] = pd.to_datetime(df['Fecha'])
-        
-        meses_map = {
-            1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
-            5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
-            9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
-        }
-        # Sobrescribir/crear la columna Mes formateada en español
-        df['Mes'] = df['Fecha'].dt.month.map(meses_map)
-        
+    df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
+    df = df.dropna(subset=['Fecha']) # Eliminar fechas no válidas
+    
+    meses_map = {
+        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
+        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
+        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
+    }
+    df['Mes'] = df['Fecha'].dt.month.map(meses_map)
+    
+    # Limpiar Categoría (si está vacía, asignar 'Sin Categoría' o eliminar)
     if 'Categoria' in df.columns:
+        df = df.dropna(subset=['Categoria'])
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
+        df = df[df['Categoria'].str.lower() != 'nan'] # Filtrar texto 'nan'
         
     return df
 
@@ -52,8 +57,9 @@ except Exception as e:
 # 3. BARRA LATERAL (Panel de Control)
 st.sidebar.title("🎛️ Panel de Control")
 
-meses_disponibles = list(df['Mes'].unique()) if 'Mes' in df.columns else []
-categorias_disponibles = list(df['Categoria'].unique()) if 'Categoria' in df.columns else []
+# Filtrar listas para excluir cualquier nulo residual
+meses_disponibles = [m for m in df['Mes'].unique() if pd.notna(m) and str(m).lower() != 'nan']
+categorias_disponibles = [c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']
 
 meses_seleccionados = st.sidebar.multiselect(
     "📅 Seleccionar Mes(es):",
@@ -94,7 +100,7 @@ st.markdown("---")
 
 # 6. GRÁFICOS
 if df_filtrado.empty:
-    st.warning("⚠️ No hay datos para los filtros seleccionados.")
+    st.warning("⚠️ No hay datos válidos para los filtros seleccionados.")
 else:
     col_left, col_right = st.columns(2)
     
