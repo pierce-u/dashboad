@@ -9,12 +9,16 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Cargar datos con limpieza estricta de nulos
+# 2. Cargar datos leyendo TODAS las pestañas del Excel
 @st.cache_data
 def cargar_datos():
-    df = pd.read_excel("ventas_ficticias_Q1_2026.xlsx")
+    # Cargar todas las hojas del libro de Excel en un diccionario
+    hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
     
-    # Limpiar espacios en blanco al inicio o final de los encabezados
+    # Unir todas las pestañas (Enero, Febrero, Marzo, Abril) en un solo DataFrame
+    df = pd.concat(hojas_excel.values(), ignore_index=True)
+    
+    # Limpiar espacios en los encabezados
     df.columns = df.columns.astype(str).str.strip()
     
     # Renombrar columnas clave
@@ -26,13 +30,17 @@ def cargar_datos():
     }
     df.rename(columns=renombres, inplace=True)
     
-    # Eliminar filas donde la fecha o el monto sean nulos/vacíos
+    # Excluir filas resumen/totales y registros vacíos
+    if 'Concepto' in df.columns:
+        df = df[df['Concepto'].astype(str).str.strip().str.lower() != 'total']
+        
     df = df.dropna(subset=['Fecha', 'Monto'])
     
-    # Procesar Fecha y Mes
-    df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce')
-    df = df.dropna(subset=['Fecha']) # Eliminar fechas no válidas
+    # Convertir Fecha asegurando formato correcto
+    df['Fecha'] = pd.to_datetime(df['Fecha'], dayfirst=True, errors='coerce')
+    df = df.dropna(subset=['Fecha']) # Eliminar fechas inválidas
     
+    # Mapear mes en español
     meses_map = {
         1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
         5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
@@ -40,11 +48,10 @@ def cargar_datos():
     }
     df['Mes'] = df['Fecha'].dt.month.map(meses_map)
     
-    # Limpiar Categoría (si está vacía, asignar 'Sin Categoría' o eliminar)
+    # Limpiar Categoría
     if 'Categoria' in df.columns:
-        df = df.dropna(subset=['Categoria'])
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
-        df = df[df['Categoria'].str.lower() != 'nan'] # Filtrar texto 'nan'
+        df = df[df['Categoria'].str.lower() != 'nan']
         
     return df
 
@@ -57,9 +64,12 @@ except Exception as e:
 # 3. BARRA LATERAL (Panel de Control)
 st.sidebar.title("🎛️ Panel de Control")
 
-# Filtrar listas para excluir cualquier nulo residual
-meses_disponibles = [m for m in df['Mes'].unique() if pd.notna(m) and str(m).lower() != 'nan']
-categorias_disponibles = [c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']
+# Ordenar los meses en secuencia natural
+orden_meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+meses_en_datos = [m for m in df['Mes'].unique() if pd.notna(m)]
+meses_disponibles = [m for m in orden_meses if m in meses_en_datos]
+
+categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan'])
 
 meses_seleccionados = st.sidebar.multiselect(
     "📅 Seleccionar Mes(es):",
@@ -100,7 +110,7 @@ st.markdown("---")
 
 # 6. GRÁFICOS
 if df_filtrado.empty:
-    st.warning("⚠️ No hay datos válidos para los filtros seleccionados.")
+    st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
     col_left, col_right = st.columns(2)
     
@@ -108,7 +118,6 @@ else:
         st.subheader("📈 Evolución de Ventas por Mes")
         if 'Mes' in df_filtrado.columns:
             ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-            orden_meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
             ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=orden_meses, ordered=True)
             ventas_por_mes = ventas_por_mes.sort_values('Mes')
             
