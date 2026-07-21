@@ -9,65 +9,76 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para diseño Ejecutivo / Corporativo
+# 2. Inyección de CSS para Relieve, Sombras 3D y Bordes Ejecutivos
 st.markdown("""
     <style>
     /* Fondo principal de la app */
     .stApp {
-        background-color: #0e1117;
+        background-color: #0b0e14;
         color: #e0e6ed;
     }
     
     /* Estilo para la barra lateral */
     section[data-testid="stSidebar"] {
-        background-color: #161b22;
-        border-right: 1px solid #30363d;
+        background-color: #121721;
+        border-right: 1px solid #1f2937;
     }
     
-    /* Estilos para las tarjetas de métricas */
+    /* Tarjetas de Métricas (KPIs) con profundidad 3D */
     div[data-testid="stMetric"] {
-        background-color: #161b22;
-        border: 1px solid #30363d;
-        border-radius: 10px;
-        padding: 15px 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        background: linear-gradient(145deg, #161c28, #10141d);
+        border: 1px solid #2d3748;
+        border-radius: 14px;
+        padding: 20px;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 
+                    0 8px 10px -6px rgba(0, 0, 0, 0.5),
+                    inset 0 1px 1px rgba(255, 255, 255, 0.08);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 14px 30px -5px rgba(0, 0, 0, 0.7), 
+                    0 0 15px rgba(56, 189, 248, 0.2);
+        border-color: #38bdf8;
+    }
+
     div[data-testid="stMetric"] label {
-        color: #8b949e !important;
-        font-size: 0.9rem !important;
-        font-weight: 600 !important;
+        color: #94a3b8 !important;
+        font-size: 0.85rem !important;
+        font-weight: 700 !important;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.8px;
     }
     
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #58a6ff !important;
-        font-size: 1.8rem !important;
-        font-weight: 700 !important;
+        color: #38bdf8 !important;
+        font-size: 2rem !important;
+        font-weight: 800 !important;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.5);
     }
     
-    /* Personalización de títulos */
+    /* Titulares con estilo */
     h1 {
-        color: #f0f6fc;
-        font-weight: 700;
+        color: #f8fafc;
+        font-weight: 800;
         letter-spacing: -0.5px;
     }
     
     h3 {
-        color: #c9d1d9;
-        font-size: 1.2rem !important;
-        font-weight: 600;
+        color: #e2e8f0;
+        font-size: 1.15rem !important;
+        font-weight: 700;
+        margin-bottom: 15px;
     }
     
-    /* Línea divisora */
     hr {
-        border-color: #30363d;
+        border-color: #1e293b;
     }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Cargar datos corrigiendo fechas e integrando pestañas
+# 3. Cargar datos corrigiendo fechas
 @st.cache_data
 def cargar_datos():
     hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
@@ -161,11 +172,10 @@ col1.metric("💰 Ventas Totales", f"${total_ventas:,.2f}")
 col2.metric("📦 Transacciones", f"{total_ordenes}")
 col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
-st.markdown("---")
+st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS CON PALETA EJECUTIVA
-# Paletas de color elegantes
-paleta_barras = ['#1f77b4', '#38bdf8', '#818cf8', '#a78bfa']
+# 7. GRÁFICOS CON MARCOS EN RELIEVE
+paleta_barras = ['#38bdf8', '#818cf8', '#a78bfa', '#f472b6']
 paleta_pie = ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa']
 
 if df_filtrado.empty:
@@ -174,61 +184,70 @@ else:
     col_left, col_right = st.columns(2)
     
     with col_left:
-        st.subheader("📊 Rendimiento de Ventas por Mes")
-        if 'Mes' in df_filtrado.columns:
-            ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-            ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=orden_meses, ordered=True)
-            ventas_por_mes = ventas_por_mes.sort_values('Mes')
-            
-            fig_barras = px.bar(
-                ventas_por_mes,
-                x='Mes',
-                y='Monto',
-                color='Mes',
-                text_auto='.3s',
-                labels={'Monto': 'Ventas ($)', 'Mes': 'Mes'},
-                color_discrete_sequence=paleta_barras,
-                template="plotly_dark"
-            )
-            fig_barras.update_traces(
-                textposition='outside',
-                marker_line_color='#30363d',
-                marker_line_width=1.5
-            )
-            fig_barras.update_layout(
-                showlegend=False,
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color="#c9d1d9"),
-                margin=dict(l=20, r=20, t=30, b=20)
-            )
-            
-            st.plotly_chart(fig_barras, use_container_width=True)
+        # Envoltorio del gráfico 1 en un contenedor con relieve 3D
+        with st.container(border=True):
+            st.subheader("📊 Rendimiento de Ventas por Mes")
+            if 'Mes' in df_filtrado.columns:
+                ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
+                ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=orden_meses, ordered=True)
+                ventas_por_mes = ventas_por_mes.sort_values('Mes')
+                
+                fig_barras = px.bar(
+                    ventas_por_mes,
+                    x='Mes',
+                    y='Monto',
+                    color='Mes',
+                    text_auto='.3s',
+                    labels={'Monto': 'Ventas ($)', 'Mes': 'Mes'},
+                    color_discrete_sequence=paleta_barras,
+                    template="plotly_dark"
+                )
+                fig_barras.update_traces(
+                    textposition='outside',
+                    marker_line_color='#ffffff',
+                    marker_line_width=1.5,
+                    opacity=0.9
+                )
+                fig_barras.update_layout(
+                    showlegend=False,
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color="#cbd5e1", family="sans-serif"),
+                    xaxis=dict(showgrid=False, linecolor='#334155'),
+                    yaxis=dict(showgrid=True, gridcolor='#1e293b', linecolor='#334155'),
+                    margin=dict(l=20, r=20, t=30, b=20)
+                )
+                
+                st.plotly_chart(fig_barras, use_container_width=True)
 
     with col_right:
-        st.subheader("🏷️ Distribución por Categoría")
-        if 'Categoria' in df_filtrado.columns:
-            fig_pie = px.pie(
-                df_filtrado,
-                names='Categoria',
-                values='Monto',
-                hole=0.5,
-                color_discrete_sequence=paleta_pie,
-                template="plotly_dark"
-            )
-            fig_pie.update_traces(
-                textinfo='percent+label',
-                marker=dict(line=dict(color='#161b22', width=2))
-            )
-            fig_pie.update_layout(
-                paper_bgcolor='rgba(0,0,0,0)',
-                plot_bgcolor='rgba(0,0,0,0)',
-                font=dict(color="#c9d1d9"),
-                showlegend=False,
-                margin=dict(l=20, r=20, t=30, b=20)
-            )
-            st.plotly_chart(fig_pie, use_container_width=True)
+        # Envoltorio del gráfico 2 en un contenedor con relieve 3D
+        with st.container(border=True):
+            st.subheader("🏷️ Distribución por Categoría")
+            if 'Categoria' in df_filtrado.columns:
+                fig_pie = px.pie(
+                    df_filtrado,
+                    names='Categoria',
+                    values='Monto',
+                    hole=0.55,
+                    color_discrete_sequence=paleta_pie,
+                    template="plotly_dark"
+                )
+                fig_pie.update_traces(
+                    textinfo='percent+label',
+                    marker=dict(line=dict(color='#0b0e14', width=3))
+                )
+                fig_pie.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font=dict(color="#cbd5e1", family="sans-serif"),
+                    showlegend=False,
+                    margin=dict(l=20, r=20, t=30, b=20)
+                )
+                st.plotly_chart(fig_pie, use_container_width=True)
 
-    # Tabla de detalle con diseño
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # Tabla de detalle
     with st.expander("📄 Detalle de Registro de Operaciones"):
         st.dataframe(df_filtrado, use_container_width=True)
