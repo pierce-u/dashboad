@@ -25,11 +25,11 @@ st.markdown("""
         border-right: 1px solid #1e293b;
     }
     
-    /* Tarjetas de Métricas con Relieve 3D */
+    /*Tarjetas de Métricas con Relieve 3D */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #131d31, #0c1322);
         border: 1px solid #334155;
-        border-top: 1px solid #475569;
+        border-top: 1px solid #475569; /* Luz superior para relieve */
         border-left: 1px solid #475569;
         border-radius: 16px;
         padding: 22px;
@@ -64,8 +64,8 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
         background: linear-gradient(145deg, #0f172a, #090e1a) !important;
         border: 1px solid #2d3d54 !important;
-        border-top: 1px solid #475569 !important;
-        border-left: 1px solid #475569 !important;
+        border-top: 1px solid #475569 !important; /* Bisel de luz superior */
+        border-left: 1px solid #475569 !important; /* Bisel de luz izquierdo */
         border-radius: 20px !important;
         padding: 22px !important;
         box-shadow: 0 15px 35px rgba(0, 0, 0, 0.85), 
@@ -135,27 +135,8 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# 4. BARRA LATERAL CON FILTROS
+# 4. BARRA LATERAL
 st.sidebar.title("🎛️ Panel de Control")
-
-# Obtenemos las fechas mínimas y máximas de los datos
-if not df.empty and 'Fecha' in df.columns and df['Fecha'].notna().any():
-    fecha_min = df['Fecha'].min().date()
-    fecha_max = df['Fecha'].max().date()
-else:
-    fecha_min = pd.to_datetime("2026-01-01").date()
-    fecha_max = pd.to_datetime("2026-12-31").date()
-
-# Filtro de rango de fechas
-st.sidebar.subheader("📅 Rango de Fechas")
-rango_fechas = st.sidebar.date_input(
-    "Seleccionar Rango:",
-    value=(fecha_min, fecha_max),
-    min_value=fecha_min,
-    max_value=fecha_max
-)
-
-st.sidebar.markdown("---")
 
 MESES_CALENDARIO = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
@@ -183,22 +164,12 @@ categorias_seleccionadas = st.sidebar.multiselect(
     default=categorias_disponibles
 )
 
-# 5. APLICAR FILTROS COMBINADOS (FECHAS + MESES + CATEGORÍAS)
+# 5. APLICAR FILTROS
 df_filtrado = df.copy()
 
-# Filtrar por Rango de Fechas
-if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
-    f_inicio, f_fin = rango_fechas
-    df_filtrado = df_filtrado[
-        (df_filtrado['Fecha'].dt.date >= f_inicio) & 
-        (df_filtrado['Fecha'].dt.date <= f_fin)
-    ]
-
-# Filtrar por Meses
 if meses_seleccionados and 'Mes' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_seleccionados)]
 
-# Filtrar por Categorías
 if categorias_seleccionadas and 'Categoria' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
@@ -218,8 +189,8 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. ESTILOS Y PALETA DE COLORES
-color_fondo_grafica = "#1e2d42"
+# 7. COLOR MÁS CLARO PARA EL LIENZO DE LA GRÁFICA (ALTO CONTRASTE Y CONTENIDO DESTACADO)
+color_fondo_grafica = "#1e2d42" # Tono Gris-Azulado más claro que resalta dentro de la tarjeta
 
 COLORES_MESES = {
     'Enero': '#00f2fe',
@@ -237,9 +208,9 @@ COLORES_CATEGORIAS = {
 }
 
 if df_filtrado.empty:
-    st.warning("⚠️ No hay datos para el rango de fechas y filtros seleccionados.")
+    st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES / FECHA ---
+    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES ---
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
@@ -370,7 +341,7 @@ else:
                     hovertemplate="<b>%{y}</b><br>Monto: $%{-x:,.2f}<extra></extra>"
                 ))
 
-                max_val = top10_conceptos['Monto'].max() * 1.25 if not top10_conceptos.empty else 1000
+                max_val = top10_conceptos['Monto'].max() * 1.25
 
                 fig_lollipop.update_layout(
                     paper_bgcolor=color_fondo_grafica,
