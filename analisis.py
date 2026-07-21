@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 
 # 1. Configuración de la página
@@ -101,67 +100,76 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# 4. BARRA LATERAL CON FILTROS DINÁMICOS
-st.sidebar.title("🎛️ Panel de Control")
-
-if not df.empty and 'Fecha' in df.columns and df['Fecha'].notna().any():
-    fecha_min = df['Fecha'].min().date()
-    fecha_max = df['Fecha'].max().date()
-else:
-    fecha_min = pd.to_datetime("2026-01-01").date()
-    fecha_max = pd.to_datetime("2026-12-31").date()
-
-# A. FILTRO FECHAS
-st.sidebar.subheader("📅 Rango de Fechas")
-rango_fechas = st.sidebar.date_input(
-    "Seleccionar Rango:",
-    value=(fecha_min, fecha_max),
-    min_value=fecha_min,
-    max_value=fecha_max
-)
-
-# Primer filtrado por Fecha para restringir los meses/categorías disponibles
-df_filtrado_fecha = df.copy()
-if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
-    f_inicio, f_fin = rango_fechas
-    df_filtrado_fecha = df_filtrado_fecha[
-        (df_filtrado_fecha['Fecha'].dt.date >= f_inicio) & 
-        (df_filtrado_fecha['Fecha'].dt.date <= f_fin)
-    ]
-
-st.sidebar.markdown("---")
-
-# B. FILTRO MESES (Sincronizado dinámicamente con el rango de fecha seleccionado)
-MESES_CALENDARIO = [
+# --- CONFIGURACIÓN DE LÍMITES Y OPCIONES ---
+MESES_ORDEN = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ]
+meses_disponibles = [m for m in MESES_ORDEN if m in df['Mes'].unique()]
 
-meses_detectados = df_filtrado_fecha['Mes'].unique() if not df_filtrado_fecha.empty else []
-meses_disponibles = [m for m in MESES_CALENDARIO if m in meses_detectados]
+fecha_min_data = df['Fecha'].min().date() if not df.empty else pd.to_datetime("2026-01-01").date()
+fecha_max_data = df['Fecha'].max().date() if not df.empty else pd.to_datetime("2026-12-31").date()
 
-meses_seleccionados = st.sidebar.multiselect(
-    "📅 Seleccionar Mes(es):",
-    options=meses_disponibles,
-    default=meses_disponibles
+# --- INICIALIZAR SESSION STATE PARA LOS FILTROS ---
+if 'filtro_fechas' not in st.session_state:
+    st.session_state.filtro_fechas = (fecha_min_data, fecha_max_data)
+
+if 'filtro_meses' not in st.session_state:
+    st.session_state.filtro_meses = []
+
+# --- FUNCIONES DE CALLBACK (LIMPIEZA MUTUA) ---
+def al_cambiar_fecha():
+    # Al mover la fecha, reiniciamos el selector de meses
+    st.session_state.filtro_meses = []
+
+def al_cambiar_meses():
+    # Al seleccionar meses, restauramos el rango de fechas al total por defecto
+    st.session_state.filtro_fechas = (fecha_min_data, fecha_max_data)
+
+# 4. BARRA LATERAL
+st.sidebar.title("🎛️ Panel de Control")
+
+# Selector de Fechas
+rango_fechas = st.sidebar.date_input(
+    "📅 Rango de Fechas:",
+    key='filtro_fechas',
+    min_value=fecha_min_data,
+    max_value=fecha_max_data,
+    on_change=al_cambiar_fecha
 )
 
-# C. FILTRO CATEGORÍAS
-categorias_disponibles = sorted([c for c in df_filtrado_fecha['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']) if not df_filtrado_fecha.empty else []
+# Selector de Meses
+meses_seleccionados = st.sidebar.multiselect(
+    "📆 Seleccionar Mes(es):",
+    options=meses_disponibles,
+    key='filtro_meses',
+    on_change=al_cambiar_meses
+)
 
+# Selector de Categorías (se mantiene independiente)
+categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan'])
 categorias_seleccionadas = st.sidebar.multiselect(
     "🏷️ Seleccionar Categoría(s):",
     options=categorias_disponibles,
     default=categorias_disponibles
 )
 
-# 5. APLICAR FILTROS SOBRE EL DATAFRAME FINAL
-df_filtrado = df_filtrado_fecha.copy()
+# 5. LÓGICA DE FILTRADO
+df_filtrado = df.copy()
 
-if meses_seleccionados and 'Mes' in df_filtrado.columns:
+# A) Si el usuario eligió un mes explícito, filtramos SOLO por meses
+if meses_seleccionados:
     df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_seleccionados)]
+# B) Si no hay meses seleccionados, aplicamos el rango de fechas activas
+elif isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
+    f_inicio, f_fin = rango_fechas
+    df_filtrado = df_filtrado[
+        (df_filtrado['Fecha'].dt.date >= f_inicio) & 
+        (df_filtrado['Fecha'].dt.date <= f_fin)
+    ]
 
-if categorias_seleccionadas and 'Categoria' in df_filtrado.columns:
+# C) Aplicar categorías
+if categorias_seleccionadas:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
 # 6. HEADER Y MÉTRICAS
@@ -169,7 +177,6 @@ st.title("💼 Dashboard de Ventas Ejecutivas 2026")
 st.markdown("---")
 
 col1, col2, col3 = st.columns(3)
-
 total_ventas = df_filtrado['Monto'].sum() if not df_filtrado.empty else 0
 total_ordenes = len(df_filtrado)
 ticket_promedio = df_filtrado['Monto'].mean() if not df_filtrado.empty else 0
@@ -180,37 +187,21 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. VISUALIZACIONES
+# 7. VISUALIZACIÓN DE TENDENCIA
 color_fondo_grafica = "#1e2d42"
-
-COLORES_MESES = {
-    'Enero': '#00f2fe',
-    'Febrero': '#ff007f',
-    'Marzo': '#ffbe0b',
-    'Abril': '#00f5d4'
-}
-
-COLORES_CATEGORIAS = {
-    'Servicios': '#00f2fe',
-    'Electrónica': '#ff007f',
-    'Mobiliario': '#ffbe0b',
-    'Software': '#00f5d4',
-    'Accesorios': '#8338ec'
-}
+COLORES_MESES = {'Enero': '#00f2fe', 'Febrero': '#ff007f', 'Marzo': '#ffbe0b', 'Abril': '#00f5d4'}
 
 if df_filtrado.empty:
-    st.warning("⚠️ No hay datos para el rango de fechas y filtros seleccionados.")
+    st.warning("⚠️ No hay datos para la combinación de filtros seleccionada.")
 else:
-    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES (CORREGIDA) ---
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
-        # Agrupar por mes
         ventas_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
         
-        # Filtrar estrictamente solo los meses que estén dentro de las fechas seleccionadas
-        ventas_mes = ventas_mes[ventas_mes['Mes'].isin(meses_disponibles)]
-        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_disponibles, ordered=True)
+        # Conservar el orden cronológico estricto de los meses filtrados
+        meses_presentes = [m for m in MESES_ORDEN if m in ventas_mes['Mes'].values]
+        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_presentes, ordered=True)
         ventas_mes = ventas_mes.sort_values('Mes').dropna()
 
         fig_linea = go.Figure()
@@ -237,7 +228,7 @@ else:
             font=dict(color="#f8fafc", family="sans-serif"),
             xaxis=dict(
                 title="",
-                type='category', # Forzar a que solo dibuje las categorías enviadas sin rellenar el eje X
+                type='category',
                 showgrid=False,
                 linecolor='#475569',
                 tickfont=dict(size=14, color="#f8fafc")
@@ -255,109 +246,6 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Ranking Categorías 3D & Lollipop Chart Neón ---
-    col_cat, col_conc = st.columns(2)
-
-    with col_cat:
-        with st.container(border=True):
-            st.subheader("🌐 Ranking 3D de Categorías más Vendidas")
-            if 'Categoria' in df_filtrado.columns:
-                top_cat = df_filtrado.groupby('Categoria')['Monto'].sum().reset_index().sort_values('Monto', ascending=False)
-                colores_lista = [COLORES_CATEGORIAS.get(c, '#00f2fe') for c in top_cat['Categoria']]
-                
-                fig_3d = go.Figure(data=[go.Pie(
-                    labels=top_cat['Categoria'],
-                    values=top_cat['Monto'],
-                    pull=[0.08 if i==0 else 0.04 for i in range(len(top_cat))],
-                    marker=dict(
-                        colors=colores_lista,
-                        line=dict(color='#0f172a', width=3)
-                    ),
-                    textinfo='label+value',
-                    texttemplate='%{label}<br><b>$%{value:,.0f}</b>',
-                    hoverinfo='label+percent+value',
-                    textfont=dict(size=13, color='#ffffff'),
-                    opacity=0.98
-                )])
-                
-                fig_3d.update_layout(
-                    paper_bgcolor=color_fondo_grafica,
-                    plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f8fafc", family="sans-serif"),
-                    showlegend=True,
-                    legend=dict(
-                        orientation="h",
-                        yanchor="bottom",
-                        y=-0.2,
-                        xanchor="center",
-                        x=0.5,
-                        font=dict(color="#cbd5e1")
-                    ),
-                    margin=dict(l=20, r=20, t=30, b=40)
-                )
-                st.plotly_chart(fig_3d, use_container_width=True)
-
-    with col_conc:
-        with st.container(border=True):
-            st.subheader("🍭 Top 10 Conceptos más Vendidos (Lollipop)")
-            if 'Concepto' in df_filtrado.columns:
-                top10_conceptos = (
-                    df_filtrado.groupby('Concepto')['Monto']
-                    .sum()
-                    .nlargest(10)
-                    .reset_index()
-                    .sort_values('Monto', ascending=True)
-                )
-                
-                fig_lollipop = go.Figure()
-
-                for i, row in top10_conceptos.iterrows():
-                    fig_lollipop.add_trace(go.Scatter(
-                        x=[0, row['Monto']],
-                        y=[row['Concepto'], row['Concepto']],
-                        mode='lines',
-                        line=dict(color='#38bdf8', width=3),
-                        showlegend=False,
-                        hoverinfo='skip'
-                    ))
-
-                fig_lollipop.add_trace(go.Scatter(
-                    x=top10_conceptos['Monto'],
-                    y=top10_conceptos['Concepto'],
-                    mode='markers+text',
-                    marker=dict(
-                        color='#00f2fe',
-                        size=20,
-                        line=dict(color='#ffffff', width=2)
-                    ),
-                    text=[f"  <b>${v/1000:.1f}k</b>" for v in top10_conceptos['Monto']],
-                    textposition="middle right",
-                    textfont=dict(color="#00f2fe", size=12),
-                    name='Ventas',
-                    hovertemplate="<b>%{y}</b><br>Monto: $%{-x:,.2f}<extra></extra>"
-                ))
-
-                max_val = top10_conceptos['Monto'].max() * 1.25 if not top10_conceptos.empty else 1000
-
-                fig_lollipop.update_layout(
-                    paper_bgcolor=color_fondo_grafica,
-                    plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f8fafc", family="sans-serif", size=12),
-                    xaxis=dict(
-                        showgrid=True, 
-                        gridcolor='#334155', 
-                        linecolor='#475569',
-                        range=[0, max_val]
-                    ),
-                    yaxis=dict(showgrid=False, linecolor='#475569'),
-                    margin=dict(l=20, r=40, t=30, b=20),
-                    showlegend=False
-                )
-                
-                st.plotly_chart(fig_lollipop, use_container_width=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # Tabla de detalle
+    # Tabla de detalle opcional
     with st.expander("📄 Detalle de Registro de Operaciones"):
         st.dataframe(df_filtrado, use_container_width=True)
