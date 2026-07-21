@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
 # 1. Configuración de la página
 st.set_page_config(
@@ -186,17 +187,24 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS (BARRAS HORIZONTALES CON PALETAS VÍVIDAS Y LLAMATIVAS)
+# 7. GRÁFICOS CON COLORES VÍVIDOS Y EFECTO 3D
 color_fondo_grafica = "#151e2e"
 
-# Paletas de colores neón y super llamativas
+# Paletas de colores vívidos neón y ejecutivos para cada categoría
+COLORES_CATEGORIAS = {
+    'Servicios': '#00f2fe',     # Cyan Neón
+    'Electrónica': '#ff007f',   # Rosa/Magenta Eléctrico
+    'Mobiliario': '#ffbe0b',    # Oro Neón
+    'Software': '#00f5d4',      # Verde Menta / Esmeralda
+    'Accesorios': '#8338ec'     # Púrpura Ejecutiva
+}
+
 paleta_meses = ['#00f2fe', '#4facfe', '#7000ff', '#f107a3', '#ff007f', '#00f5d4']
-paleta_pie = ['#00f2fe', '#f107a3', '#ffbe0b', '#00f5d4', '#8338ec', '#ff006e']
 
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: Ventas por Mes (Horizontal) & Pie Chart Categorías ---
+    # --- FILA 1: Ventas por Mes (Horizontal) & Categorías (Gráfica Circular 3D / Donut) ---
     col_left, col_right = st.columns(2)
     
     with col_left:
@@ -237,75 +245,78 @@ else:
 
     with col_right:
         with st.container(border=True):
-            st.subheader("🏷️ Distribución por Categoría")
+            st.subheader("🍩 Distribución Porcentual por Categoría")
             if 'Categoria' in df_filtrado.columns:
-                fig_pie = px.pie(
-                    df_filtrado,
+                ventas_cat = df_filtrado.groupby('Categoria')['Monto'].sum().reset_index()
+                
+                fig_donut = px.pie(
+                    ventas_cat,
                     names='Categoria',
                     values='Monto',
-                    hole=0.55,
-                    color_discrete_sequence=paleta_pie,
+                    hole=0.5,
+                    color='Categoria',
+                    color_discrete_map=COLORES_CATEGORIAS,
                     template="plotly_dark"
                 )
-                fig_pie.update_traces(
+                fig_donut.update_traces(
                     textinfo='percent+label',
                     textfont_size=13,
-                    marker=dict(line=dict(color='#111827', width=3))
+                    marker=dict(line=dict(color='#080b10', width=3))
                 )
-                fig_pie.update_layout(
+                fig_donut.update_layout(
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
                     font=dict(color="#f1f5f9", family="sans-serif"),
                     showlegend=False,
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
-                st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_donut, use_container_width=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # --- FILA 2: Top Categorías & Top 10 Conceptos (Ambas en Barras Horizontales) ---
+    # --- FILA 2: Ranking de Categorías (Circular 3D) & Top 10 Conceptos (Horizontal) ---
     col_cat, col_conc = st.columns(2)
 
     with col_cat:
         with st.container(border=True):
-            st.subheader("📂 Ranking de Categorías más Vendidas")
+            st.subheader("🌐 Ranking 3D de Categorías más Vendidas")
             if 'Categoria' in df_filtrado.columns:
-                top_categorias = (
-                    df_filtrado.groupby('Categoria')['Monto']
-                    .sum()
-                    .nlargest(10)
-                    .reset_index()
-                    .sort_values('Monto', ascending=True)  # Para que el valor mayor quede arriba
-                )
+                top_cat = df_filtrado.groupby('Categoria')['Monto'].sum().reset_index().sort_values('Monto', ascending=False)
                 
-                fig_cat = px.bar(
-                    top_categorias,
-                    y='Categoria',
-                    x='Monto',
-                    color='Monto',
-                    orientation='h',
-                    text_auto='.3s',
-                    labels={'Monto': 'Ventas ($)', 'Categoria': 'Categoría'},
-                    color_continuous_scale=['#00f2fe', '#00f5d4', '#2ec4b6'],
-                    template="plotly_dark"
-                )
-                fig_cat.update_traces(
-                    textposition='outside',
-                    marker_line_color='#ffffff',
-                    marker_line_width=1.2,
+                # Asignar colores específicos por categoría
+                colores_lista = [COLORES_CATEGORIAS.get(c, '#00f2fe') for c in top_cat['Categoria']]
+                
+                # Gráfica Circular con efecto 3D elevado y desfasado (pull)
+                fig_3d = go.Figure(data=[go.Pie(
+                    labels=top_cat['Categoria'],
+                    values=top_cat['Monto'],
+                    pull=[0.1, 0.05, 0.05, 0.05, 0.05], # Eleva las rebanadas dando sensación 3D flotante
+                    marker=dict(
+                        colors=colores_lista,
+                        line=dict(color='#080b10', width=3)
+                    ),
+                    textinfo='label+value',
+                    texttemplate='%{label}<br><b>$%{value:,.0f}</b>',
+                    hoverinfo='label+percent+value',
+                    textfont=dict(size=13, color='#ffffff'),
                     opacity=0.95
-                )
-                fig_cat.update_layout(
-                    showlegend=False,
-                    coloraxis_showscale=False,
+                )])
+                
+                fig_3d.update_layout(
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f1f5f9", family="sans-serif", size=13),
-                    xaxis=dict(showgrid=True, gridcolor='#23324a', linecolor='#334155'),
-                    yaxis=dict(showgrid=False, linecolor='#334155'),
-                    margin=dict(l=20, r=20, t=30, b=20)
+                    font=dict(color="#f1f5f9", family="sans-serif"),
+                    showlegend=True,
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.2,
+                        xanchor="center",
+                        x=0.5
+                    ),
+                    margin=dict(l=20, r=20, t=30, b=40)
                 )
-                st.plotly_chart(fig_cat, use_container_width=True)
+                st.plotly_chart(fig_3d, use_container_width=True)
 
     with col_conc:
         with st.container(border=True):
@@ -316,7 +327,7 @@ else:
                     .sum()
                     .nlargest(10)
                     .reset_index()
-                    .sort_values('Monto', ascending=True)  # Para que el producto #1 quede arriba
+                    .sort_values('Monto', ascending=True)
                 )
                 
                 fig_top10 = px.bar(
