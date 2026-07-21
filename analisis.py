@@ -10,36 +10,36 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Fondo Contrastado, Tarjetas Flotantes y Títulos Neón
+# 2. Inyección de CSS para Fondo de Alto Contraste en 3 Niveles
 st.markdown("""
     <style>
-    /* Fondo general del Dashboard */
+    /* Nivel 1: Fondo General del Dashboard (Negro Carbón Profundo) */
     .stApp {
-        background-color: #080b10;
-        color: #f1f5f9;
+        background-color: #030712;
+        color: #f8fafc;
     }
     
     /* Barra lateral */
     section[data-testid="stSidebar"] {
-        background-color: #0f172a;
+        background-color: #0b0f19;
         border-right: 1px solid #1e293b;
     }
     
-    /* Tarjetas de Métricas (KPIs) con relieve luminoso */
+    /* Nivel 2: Cajas de KPIs con relieve luminoso */
     div[data-testid="stMetric"] {
-        background: linear-gradient(135deg, #131b2e, #0d1322);
-        border: 1px solid #2d3854;
+        background: linear-gradient(145deg, #0f172a, #131d33);
+        border: 1px solid #334155;
         border-radius: 16px;
         padding: 22px;
-        box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.7), 
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8), 
                     inset 0 1px 1px rgba(255, 255, 255, 0.1);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     
     div[data-testid="stMetric"]:hover {
         transform: translateY(-3px);
-        box-shadow: 0 14px 32px -5px rgba(0, 0, 0, 0.8), 
-                    0 0 20px rgba(0, 242, 254, 0.25);
+        box-shadow: 0 14px 32px -5px rgba(0, 0, 0, 0.9), 
+                    0 0 20px rgba(0, 242, 254, 0.3);
         border-color: #00f2fe;
     }
 
@@ -55,21 +55,21 @@ st.markdown("""
         color: #00f2fe !important;
         font-size: 2.2rem !important;
         font-weight: 800 !important;
-        text-shadow: 0 0 12px rgba(0, 242, 254, 0.4);
+        text-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
     }
     
-    /* Contenedores de Gráficos (Tarjetas Neón Contrastadas) */
+    /* Nivel 2: Cajas Contenedoras de los Gráficos */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
-        background-color: #111827 !important;
-        border: 1px solid #1f293d !important;
+        background-color: #0f172a !important;
+        border: 1px solid #283548 !important;
         border-radius: 18px !important;
-        padding: 18px !important;
-        box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.7), 
+        padding: 20px !important;
+        box-shadow: 0 12px 30px -5px rgba(0, 0, 0, 0.8), 
                     inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
     }
 
     h1 { color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
-    h3 { color: #38bdf8; font-size: 1.15rem !important; font-weight: 700; margin-bottom: 15px; }
+    h3 { color: #38bdf8; font-size: 1.2rem !important; font-weight: 700; margin-bottom: 15px; }
     hr { border-color: #1e293b; }
     </style>
 """, unsafe_allow_html=True)
@@ -187,16 +187,14 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. MAPA DE COLORES VÍVIDOS Y NEÓN
-color_fondo_grafica = "#151e2e"
+# 7. COLOR DEL LIENZO DEL GRÁFICO (NIVEL 3: GRIS AZULADO ELEVADO PARA ALTO CONTRASTE)
+color_fondo_grafica = "#1e293b" # Genera contraste directo con la caja #0f172a
 
 COLORES_MESES = {
-    'Enero': '#00f2fe',      # Cian Neón
-    'Febrero': '#ff007f',    # Magenta Eléctrico
-    'Marzo': '#ffbe0b',      # Oro Neón
-    'Abril': '#00f5d4',      # Verde Menta
-    'Mayo': '#8338ec',      # Púrpura
-    'Junio': '#3a86ff'       # Azul
+    'Enero': '#00f2fe',
+    'Febrero': '#ff007f',
+    'Marzo': '#ffbe0b',
+    'Abril': '#00f5d4'
 }
 
 COLORES_CATEGORIAS = {
@@ -210,19 +208,16 @@ COLORES_CATEGORIAS = {
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para los filtros seleccionados.")
 else:
-    # --- FILA 1: GRAFICA LINEAL CLARA Y SENCILLA POR MES ---
+    # --- FILA 1: GRAFICA LINEAL TENDEICA POR MES ---
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
-        # Agrupar total por mes manteniendo el orden cronológico
         ventas_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
         ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_disponibles, ordered=True)
         ventas_mes = ventas_mes.sort_values('Mes').dropna(subset=['Mes'])
         
-        # Crear gráfico de línea claro
         fig_linea = go.Figure()
 
-        # Dibujar la línea principal
         fig_linea.add_trace(go.Scatter(
             x=ventas_mes['Mes'],
             y=ventas_mes['Monto'],
@@ -230,10 +225,10 @@ else:
             text=[f"<b>{m}</b><br>${v:,.0f}" for m, v in zip(ventas_mes['Mes'], ventas_mes['Monto'])],
             textposition="top center",
             textfont=dict(color="#ffffff", size=13),
-            line=dict(color="#00f2fe", width=4, shape='spline'), # Línea suavizada
+            line=dict(color="#00f2fe", width=4, shape='spline'),
             marker=dict(
                 size=12,
-                color=[COLORES_MESES.get(m, '#00f2fe') for m in ventas_mes['Mes']], # Cada mes con su color
+                color=[COLORES_MESES.get(m, '#00f2fe') for m in ventas_mes['Mes']],
                 line=dict(color='#ffffff', width=2)
             ),
             hovertemplate="<b>%{x}</b><br>Ventas Totales: $%{-y:,.2f}<extra></extra>"
@@ -242,18 +237,18 @@ else:
         fig_linea.update_layout(
             paper_bgcolor=color_fondo_grafica,
             plot_bgcolor=color_fondo_grafica,
-            font=dict(color="#f1f5f9", family="sans-serif"),
+            font=dict(color="#f8fafc", family="sans-serif"),
             xaxis=dict(
                 title="",
                 showgrid=False,
-                linecolor='#334155',
-                tickfont=dict(size=14, color="#f1f5f9")
+                linecolor='#475569',
+                tickfont=dict(size=14, color="#f8fafc")
             ),
             yaxis=dict(
                 title="Ventas ($)",
                 showgrid=True,
-                gridcolor='#23324a',
-                linecolor='#334155'
+                gridcolor='#334155',
+                linecolor='#475569'
             ),
             margin=dict(l=20, r=20, t=40, b=20)
         )
@@ -275,29 +270,30 @@ else:
                 fig_3d = go.Figure(data=[go.Pie(
                     labels=top_cat['Categoria'],
                     values=top_cat['Monto'],
-                    pull=[0.1, 0.05, 0.05, 0.05, 0.05],
+                    pull=[0.08, 0.04, 0.04, 0.04, 0.04],
                     marker=dict(
                         colors=colores_lista,
-                        line=dict(color='#080b10', width=3)
+                        line=dict(color='#0f172a', width=3) # Borde oscuro para contrastar con #1e293b
                     ),
                     textinfo='label+value',
                     texttemplate='%{label}<br><b>$%{value:,.0f}</b>',
                     hoverinfo='label+percent+value',
                     textfont=dict(size=13, color='#ffffff'),
-                    opacity=0.95
+                    opacity=0.98
                 )])
                 
                 fig_3d.update_layout(
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f1f5f9", family="sans-serif"),
+                    font=dict(color="#f8fafc", family="sans-serif"),
                     showlegend=True,
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
                         y=-0.2,
                         xanchor="center",
-                        x=0.5
+                        x=0.5,
+                        font=dict(color="#cbd5e1") # Leyenda legible
                     ),
                     margin=dict(l=20, r=20, t=30, b=40)
                 )
@@ -337,9 +333,9 @@ else:
                     coloraxis_showscale=False,
                     paper_bgcolor=color_fondo_grafica,
                     plot_bgcolor=color_fondo_grafica,
-                    font=dict(color="#f1f5f9", family="sans-serif", size=12),
-                    xaxis=dict(showgrid=True, gridcolor='#23324a', linecolor='#334155'),
-                    yaxis=dict(showgrid=False, linecolor='#334155'),
+                    font=dict(color="#f8fafc", family="sans-serif", size=12),
+                    xaxis=dict(showgrid=True, gridcolor='#334155', linecolor='#475569'),
+                    yaxis=dict(showgrid=False, linecolor='#475569'),
                     margin=dict(l=20, r=20, t=30, b=20)
                 )
                 st.plotly_chart(fig_top10, use_container_width=True)
