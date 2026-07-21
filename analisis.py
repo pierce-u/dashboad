@@ -10,22 +10,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Efecto Relieve 3D y Alto Contraste
+# 2. Estilos CSS
 st.markdown("""
     <style>
-    /* Fondo principal del dashboard */
-    .stApp {
-        background-color: #030712;
-        color: #f8fafc;
-    }
+    .stApp { background-color: #030712; color: #f8fafc; }
+    section[data-testid="stSidebar"] { background-color: #0b0f19; border-right: 1px solid #1e293b; }
     
-    /* Barra lateral */
-    section[data-testid="stSidebar"] {
-        background-color: #0b0f19;
-        border-right: 1px solid #1e293b;
-    }
-    
-    /* Tarjetas de Métricas con Relieve 3D */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #131d31, #0c1322);
         border: 1px solid #334155;
@@ -33,34 +23,12 @@ st.markdown("""
         border-left: 1px solid #475569;
         border-radius: 16px;
         padding: 22px;
-        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.85), 
-                    inset 0 1px 2px rgba(255, 255, 255, 0.15);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 12px 28px -5px rgba(0, 0, 0, 0.85);
     }
     
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 18px 35px -5px rgba(0, 0, 0, 0.95), 
-                    0 0 25px rgba(0, 242, 254, 0.4);
-        border-color: #00f2fe;
-    }
-
-    div[data-testid="stMetric"] label {
-        color: #94a3b8 !important;
-        font-size: 0.85rem !important;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-    }
+    div[data-testid="stMetric"] label { color: #94a3b8 !important; font-weight: 700 !important; }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] { color: #00f2fe !important; font-weight: 800 !important; }
     
-    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
-        color: #00f2fe !important;
-        font-size: 2.2rem !important;
-        font-weight: 800 !important;
-        text-shadow: 0 0 12px rgba(0, 242, 254, 0.5);
-    }
-    
-    /* Contenedores / Cuadros de las Gráficas con Relieve 3D */
     div[data-testid="stVerticalBlock"] > div[data-testid="stElementContainer"] > div[data-testid="stContainer"] {
         background: linear-gradient(145deg, #0f172a, #090e1a) !important;
         border: 1px solid #2d3d54 !important;
@@ -68,11 +36,9 @@ st.markdown("""
         border-left: 1px solid #475569 !important;
         border-radius: 20px !important;
         padding: 22px !important;
-        box-shadow: 0 15px 35px rgba(0, 0, 0, 0.85), 
-                    inset 0 1px 2px rgba(255, 255, 255, 0.1) !important;
     }
 
-    h1 { color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
+    h1 { color: #f8fafc; font-weight: 800; }
     h3 { color: #38bdf8; font-size: 1.25rem !important; font-weight: 700; margin-bottom: 15px; }
     hr { border-color: #1e293b; }
     </style>
@@ -135,10 +101,9 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# 4. BARRA LATERAL CON FILTROS
+# 4. BARRA LATERAL CON FILTROS DINÁMICOS
 st.sidebar.title("🎛️ Panel de Control")
 
-# Obtenemos las fechas mínimas y máximas de los datos
 if not df.empty and 'Fecha' in df.columns and df['Fecha'].notna().any():
     fecha_min = df['Fecha'].min().date()
     fecha_max = df['Fecha'].max().date()
@@ -146,7 +111,7 @@ else:
     fecha_min = pd.to_datetime("2026-01-01").date()
     fecha_max = pd.to_datetime("2026-12-31").date()
 
-# Filtro de rango de fechas
+# A. FILTRO FECHAS
 st.sidebar.subheader("📅 Rango de Fechas")
 rango_fechas = st.sidebar.date_input(
     "Seleccionar Rango:",
@@ -155,21 +120,25 @@ rango_fechas = st.sidebar.date_input(
     max_value=fecha_max
 )
 
+# Primer filtrado por Fecha para restringir los meses/categorías disponibles
+df_filtrado_fecha = df.copy()
+if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
+    f_inicio, f_fin = rango_fechas
+    df_filtrado_fecha = df_filtrado_fecha[
+        (df_filtrado_fecha['Fecha'].dt.date >= f_inicio) & 
+        (df_filtrado_fecha['Fecha'].dt.date <= f_fin)
+    ]
+
 st.sidebar.markdown("---")
 
+# B. FILTRO MESES (Sincronizado dinámicamente con el rango de fecha seleccionado)
 MESES_CALENDARIO = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
 ]
 
-meses_detectados = df['Mes'].unique() if not df.empty else []
+meses_detectados = df_filtrado_fecha['Mes'].unique() if not df_filtrado_fecha.empty else []
 meses_disponibles = [m for m in MESES_CALENDARIO if m in meses_detectados]
-
-for m in meses_detectados:
-    if m not in meses_disponibles:
-        meses_disponibles.append(m)
-
-categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']) if not df.empty else []
 
 meses_seleccionados = st.sidebar.multiselect(
     "📅 Seleccionar Mes(es):",
@@ -177,28 +146,21 @@ meses_seleccionados = st.sidebar.multiselect(
     default=meses_disponibles
 )
 
+# C. FILTRO CATEGORÍAS
+categorias_disponibles = sorted([c for c in df_filtrado_fecha['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']) if not df_filtrado_fecha.empty else []
+
 categorias_seleccionadas = st.sidebar.multiselect(
     "🏷️ Seleccionar Categoría(s):",
     options=categorias_disponibles,
     default=categorias_disponibles
 )
 
-# 5. APLICAR FILTROS COMBINADOS (FECHAS + MESES + CATEGORÍAS)
-df_filtrado = df.copy()
+# 5. APLICAR FILTROS SOBRE EL DATAFRAME FINAL
+df_filtrado = df_filtrado_fecha.copy()
 
-# Filtrar por Rango de Fechas
-if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
-    f_inicio, f_fin = rango_fechas
-    df_filtrado = df_filtrado[
-        (df_filtrado['Fecha'].dt.date >= f_inicio) & 
-        (df_filtrado['Fecha'].dt.date <= f_fin)
-    ]
-
-# Filtrar por Meses
 if meses_seleccionados and 'Mes' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Mes'].isin(meses_seleccionados)]
 
-# Filtrar por Categorías
 if categorias_seleccionadas and 'Categoria' in df_filtrado.columns:
     df_filtrado = df_filtrado[df_filtrado['Categoria'].isin(categorias_seleccionadas)]
 
@@ -218,7 +180,7 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. ESTILOS Y PALETA DE COLORES
+# 7. VISUALIZACIONES
 color_fondo_grafica = "#1e2d42"
 
 COLORES_MESES = {
@@ -239,14 +201,18 @@ COLORES_CATEGORIAS = {
 if df_filtrado.empty:
     st.warning("⚠️ No hay datos para el rango de fechas y filtros seleccionados.")
 else:
-    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES / FECHA ---
+    # --- FILA 1: GRAFICA LINEAL TENDENCIA POR MES (CORREGIDA) ---
     with st.container(border=True):
         st.subheader("📈 Tendencia de Ventas por Mes")
         
+        # Agrupar por mes
         ventas_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_disponibles, ordered=True)
-        ventas_mes = ventas_mes.sort_values('Mes').dropna(subset=['Mes'])
         
+        # Filtrar estrictamente solo los meses que estén dentro de las fechas seleccionadas
+        ventas_mes = ventas_mes[ventas_mes['Mes'].isin(meses_disponibles)]
+        ventas_mes['Mes'] = pd.Categorical(ventas_mes['Mes'], categories=meses_disponibles, ordered=True)
+        ventas_mes = ventas_mes.sort_values('Mes').dropna()
+
         fig_linea = go.Figure()
 
         fig_linea.add_trace(go.Scatter(
@@ -271,6 +237,7 @@ else:
             font=dict(color="#f8fafc", family="sans-serif"),
             xaxis=dict(
                 title="",
+                type='category', # Forzar a que solo dibuje las categorías enviadas sin rellenar el eje X
                 showgrid=False,
                 linecolor='#475569',
                 tickfont=dict(size=14, color="#f8fafc")
@@ -301,7 +268,7 @@ else:
                 fig_3d = go.Figure(data=[go.Pie(
                     labels=top_cat['Categoria'],
                     values=top_cat['Monto'],
-                    pull=[0.08, 0.04, 0.04, 0.04, 0.04],
+                    pull=[0.08 if i==0 else 0.04 for i in range(len(top_cat))],
                     marker=dict(
                         colors=colores_lista,
                         line=dict(color='#0f172a', width=3)
