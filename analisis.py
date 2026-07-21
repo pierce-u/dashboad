@@ -9,22 +9,19 @@ st.set_page_config(
     layout="wide"
 )
 
-# 2. Inyección de CSS para Relieve, Sombras 3D y Bordes Ejecutivos
+# 2. Inyección de CSS para Relieve, Sombras 3D y Estilo Ejecutivo
 st.markdown("""
     <style>
-    /* Fondo principal de la app */
     .stApp {
         background-color: #0b0e14;
         color: #e0e6ed;
     }
     
-    /* Estilo para la barra lateral */
     section[data-testid="stSidebar"] {
         background-color: #121721;
         border-right: 1px solid #1f2937;
     }
     
-    /* Tarjetas de Métricas (KPIs) con profundidad 3D */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #161c28, #10141d);
         border: 1px solid #2d3748;
@@ -58,32 +55,33 @@ st.markdown("""
         text-shadow: 0 2px 4px rgba(0,0,0,0.5);
     }
     
-    /* Titulares con estilo */
-    h1 {
-        color: #f8fafc;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-    }
-    
-    h3 {
-        color: #e2e8f0;
-        font-size: 1.15rem !important;
-        font-weight: 700;
-        margin-bottom: 15px;
-    }
-    
-    hr {
-        border-color: #1e293b;
-    }
+    h1 { color: #f8fafc; font-weight: 800; letter-spacing: -0.5px; }
+    h3 { color: #e2e8f0; font-size: 1.15rem !important; font-weight: 700; margin-bottom: 15px; }
+    hr { border-color: #1e293b; }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Cargar datos corrigiendo fechas
+# 3. Cargar datos detectando dinámicamente cualquier pestaña que exista en el Excel
 @st.cache_data
 def cargar_datos():
     hojas_excel = pd.read_excel("ventas_ficticias_Q1_2026.xlsx", sheet_name=None)
-    df = pd.concat(hojas_excel.values(), ignore_index=True)
-    df.columns = df.columns.astype(str).str.strip()
+    
+    dfs = []
+    for nombre_hoja, df_hoja in hojas_excel.items():
+        if df_hoja.empty:
+            continue
+            
+        df_hoja = df_hoja.copy()
+        df_hoja.columns = df_hoja.columns.astype(str).str.strip()
+        
+        # Asignar el mes basándose en el nombre de la pestaña (Enero, Febrero, Mayo, etc.)
+        df_hoja['Mes'] = str(nombre_hoja).strip().capitalize()
+        dfs.append(df_hoja)
+        
+    if not dfs:
+        return pd.DataFrame()
+
+    df = pd.concat(dfs, ignore_index=True)
     
     renombres = {
         'Monto en dólares': 'Monto',
@@ -93,11 +91,13 @@ def cargar_datos():
     }
     df.rename(columns=renombres, inplace=True)
     
+    # Excluir filas de resumen/totales
     if 'Concepto' in df.columns:
         df = df[df['Concepto'].astype(str).str.strip().str.lower() != 'total']
         
     df = df.dropna(subset=['Monto'])
     
+    # Corregir incongruencias de días en meses (ej. 31/04)
     def corregir_fecha(val):
         if pd.isna(val):
             return val
@@ -108,13 +108,6 @@ def cargar_datos():
 
     df['Fecha_Texto'] = df['Fecha'].apply(corregir_fecha)
     df['Fecha'] = pd.to_datetime(df['Fecha_Texto'], dayfirst=True, errors='coerce')
-    
-    meses_map = {
-        1: 'Enero', 2: 'Febrero', 3: 'Marzo', 4: 'Abril',
-        5: 'Mayo', 6: 'Junio', 7: 'Julio', 8: 'Agosto',
-        9: 'Septiembre', 10: 'Octubre', 11: 'Noviembre', 12: 'Diciembre'
-    }
-    df['Mes'] = df['Fecha'].dt.month.map(meses_map)
     
     if 'Categoria' in df.columns:
         df['Categoria'] = df['Categoria'].astype(str).str.strip()
@@ -128,14 +121,25 @@ except Exception as e:
     st.error(f"Error al cargar el archivo Excel: {e}")
     st.stop()
 
-# 4. BARRA LATERAL (Panel de Control)
+# 4. BARRA LATERAL - Ordenamiento inteligente de los meses presentes
 st.sidebar.title("🎛️ Panel de Control")
 
-orden_meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-meses_en_datos = [m for m in df['Mes'].unique() if pd.notna(m)]
-meses_disponibles = [m for m in orden_meses if m in meses_en_datos]
+# Lista de referencia para ordenar meses cronológicamente
+MESES_CALENDARIO = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+]
 
-categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan'])
+# Detectar automáticamente cuáles de los 12 meses están presentes en el Excel
+meses_detectados = df['Mes'].unique() if not df.empty else []
+meses_disponibles = [m for m in MESES_CALENDARIO if m in meses_detectados]
+
+# Agregar cualquier pestaña con nombre personalizado que no esté en el calendario
+for m in meses_detectados:
+    if m not in meses_disponibles:
+        meses_disponibles.append(m)
+
+categorias_disponibles = sorted([c for c in df['Categoria'].unique() if pd.notna(c) and str(c).lower() != 'nan']) if not df.empty else []
 
 meses_seleccionados = st.sidebar.multiselect(
     "📅 Seleccionar Mes(es):",
@@ -174,8 +178,8 @@ col3.metric("🎯 Ticket Promedio", f"${ticket_promedio:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 7. GRÁFICOS CON MARCOS EN RELIEVE
-paleta_barras = ['#38bdf8', '#818cf8', '#a78bfa', '#f472b6']
+# 7. GRÁFICOS
+paleta_barras = ['#38bdf8', '#818cf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24']
 paleta_pie = ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#a78bfa']
 
 if df_filtrado.empty:
@@ -184,13 +188,14 @@ else:
     col_left, col_right = st.columns(2)
     
     with col_left:
-        # Envoltorio del gráfico 1 en un contenedor con relieve 3D
         with st.container(border=True):
             st.subheader("📊 Rendimiento de Ventas por Mes")
             if 'Mes' in df_filtrado.columns:
                 ventas_por_mes = df_filtrado.groupby('Mes')['Monto'].sum().reset_index()
-                ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=orden_meses, ordered=True)
-                ventas_por_mes = ventas_por_mes.sort_values('Mes')
+                
+                # Ordenar dinámicamente según la secuencia cronológica
+                ventas_por_mes['Mes'] = pd.Categorical(ventas_por_mes['Mes'], categories=meses_disponibles, ordered=True)
+                ventas_por_mes = ventas_por_mes.sort_values('Mes').dropna(subset=['Mes'])
                 
                 fig_barras = px.bar(
                     ventas_por_mes,
@@ -221,7 +226,6 @@ else:
                 st.plotly_chart(fig_barras, use_container_width=True)
 
     with col_right:
-        # Envoltorio del gráfico 2 en un contenedor con relieve 3D
         with st.container(border=True):
             st.subheader("🏷️ Distribución por Categoría")
             if 'Categoria' in df_filtrado.columns:
@@ -248,6 +252,5 @@ else:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Tabla de detalle
     with st.expander("📄 Detalle de Registro de Operaciones"):
         st.dataframe(df_filtrado, use_container_width=True)
