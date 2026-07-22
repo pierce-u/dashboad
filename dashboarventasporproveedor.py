@@ -4,15 +4,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 # ---------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO GERENCIAL DARK
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO GERENCIAL
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Executive Sales Dashboard",
+    page_title="Executive Sales Dashboard 2026",
     page_icon="📊",
     layout="wide"
 )
 
-# Inyección de CSS estilo Reporte Gerencial / High-Tech Executive
 st.markdown("""
     <style>
     .stApp {
@@ -24,7 +23,7 @@ st.markdown("""
         border-right: 1px solid #1e2d42;
     }
     
-    /* Estilo de Tarjetas de KPI */
+    /* Tarjetas de KPI */
     div[data-testid="stMetric"] {
         background: linear-gradient(145deg, #0f172a, #1e293b);
         border: 1px solid #334155;
@@ -46,7 +45,7 @@ st.markdown("""
     }
     div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
         color: #00f2fe !important;
-        font-size: 1.8rem !important;
+        font-size: 1.7rem !important;
         font-weight: 800 !important;
     }
     
@@ -60,28 +59,31 @@ st.markdown("""
     }
     
     h1 { color: #f8fafc; font-weight: 800; }
-    h3 { color: #38bdf8; font-size: 1.15rem !important; font-weight: 700; margin-bottom: 10px; }
+    h3 { color: #38bdf8; font-size: 1.1rem !important; font-weight: 700; margin-bottom: 10px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# 2. CARGA Y PROCESAMIENTO DE DATOS
+# 2. CARGA Y LIMPIEZA DE DATOS
 # ---------------------------------------------------------
 @st.cache_data
 def cargar_datos():
     archivo_excel = "ventas por provedor.xlsx"
     df = pd.read_excel(archivo_excel, sheet_name=0)
     
-    # Limpieza de nombres de columnas
     df.columns = df.columns.str.strip()
     
-    # Mapeo y conversión de tipos
     df['Fecha de contabilización'] = pd.to_datetime(df['Fecha de contabilización'], errors='coerce')
     df['VENTAS'] = pd.to_numeric(df['VENTAS'], errors='coerce').fillna(0)
     df['CANTIDAD'] = pd.to_numeric(df['CANTIDAD'], errors='coerce').fillna(0)
     
-    # Crear columnas de tiempo
-    df['Año'] = df['Fecha de contabilización'].dt.year
+    # Limpiar cadenas para evitar inconsistencias por espacios
+    df['Nombre proveedor'] = df['Nombre proveedor'].astype(str).str.strip()
+    df['CLIENTE'] = df['CLIENTE'].astype(str).str.strip()
+    df['PRODUCTO'] = df['PRODUCTO'].astype(str).str.strip()
+    df['grupos de productos'] = df['grupos de productos'].astype(str).str.strip()
+    
+    # Derivados de tiempo
     df['Trimestre'] = 'Q' + df['Fecha de contabilización'].dt.quarter.astype(str)
     df['Mes_Num'] = df['Fecha de contabilización'].dt.month
     
@@ -97,66 +99,79 @@ def cargar_datos():
 try:
     df_raw = cargar_datos()
 except Exception as e:
-    st.error(f"⚠️ Error al leer 'ventas por provedor.xlsx': {e}")
+    st.error(f"⚠️ Error al leer el archivo Excel: {e}")
     st.stop()
 
 # ---------------------------------------------------------
-# 3. FILTROS INTERACTIVOS (SIDEBAR)
+# 3. FILTROS DINÁMICOS Y REACTIVOS (SIDEBAR)
 # ---------------------------------------------------------
 st.sidebar.title("🎛️ Filtros Ejecutivos")
 
-# Filtro 1: Rango de Fecha de Contabilización
-fecha_min = df_raw['Fecha de contabilización'].min().date()
-fecha_max = df_raw['Fecha de contabilización'].max().date()
+# PASO A: Filtro primario por Rango de Fechas
+fecha_min_abs = df_raw['Fecha de contabilización'].min().date()
+fecha_max_abs = df_raw['Fecha de contabilización'].max().date()
 
 rango_fechas = st.sidebar.date_input(
     "📅 Rango de Fecha de Contabilización:",
-    value=(fecha_min, fecha_max),
-    min_value=fecha_min,
-    max_value=fecha_max
+    value=(fecha_min_abs, fecha_max_abs),
+    min_value=fecha_min_abs,
+    max_value=fecha_max_abs
 )
 
-# Filtro 2: Proveedor
-proveedores_lista = sorted(df_raw['Nombre proveedor'].dropna().unique().tolist())
-prov_sel = st.sidebar.multiselect(
-    "🏭 Nombre de Proveedor:",
-    options=proveedores_lista,
-    default=[]
-)
-
-# Filtro 3: Cliente
-clientes_lista = sorted(df_raw['CLIENTE'].dropna().unique().tolist())
-cli_sel = st.sidebar.multiselect(
-    "🏢 Nombre de Cliente:",
-    options=clientes_lista,
-    default=[]
-)
-
-# Aplicar Filtros
-df = df_raw.copy()
-
+# Aplicar filtro de fecha primero sobre la base base_fechas
 if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2:
     f_inicio, f_fin = rango_fechas
-    df = df[(df['Fecha de contabilización'].dt.date >= f_inicio) & 
-            (df['Fecha de contabilización'].dt.date <= f_fin)]
+    df_fechas = df_raw[(df_raw['Fecha de contabilización'].dt.date >= f_inicio) & 
+                       (df_raw['Fecha de contabilización'].dt.date <= f_fin)]
+else:
+    df_fechas = df_raw.copy()
 
+# PASO B: Filtro por Proveedor (basado en el rango de fechas seleccionado)
+prov_disponibles = sorted(df_fechas['Nombre proveedor'].dropna().unique().tolist())
+prov_sel = st.sidebar.multiselect(
+    "🏭 Nombre de Proveedor:",
+    options=prov_disponibles,
+    default=[]
+)
+
+# Filtrar según proveedor seleccionado
 if prov_sel:
-    df = df[df['Nombre proveedor'].isin(prov_sel)]
+    df_prov = df_fechas[df_fechas['Nombre proveedor'].isin(prov_sel)]
+else:
+    df_prov = df_fechas.copy()
 
+# PASO C: Filtro por Cliente (basado en fechas + proveedores activos)
+cli_disponibles = sorted(df_prov['CLIENTE'].dropna().unique().tolist())
+cli_sel = st.sidebar.multiselect(
+    "🏢 Nombre de Cliente:",
+    options=cli_disponibles,
+    default=[]
+)
+
+# DATAFRAME FINAL RESULTANTE
 if cli_sel:
-    df = df[df['CLIENTE'].isin(cli_sel)]
+    df_filtrado = df_prov[df_prov['CLIENTE'].isin(cli_sel)]
+else:
+    df_filtrado = df_prov.copy()
 
 # ---------------------------------------------------------
-# 4. HEADER Y KPIS GERENCIALES
+# 4. HEADER Y KPIS GERENCIALES REACTIVOS
 # ---------------------------------------------------------
 st.title("📊 Reporte Gerencial de Ventas")
+
+# Indicador visual del filtro activo
+if prov_sel or cli_sel or (isinstance(rango_fechas, tuple) and len(rango_fechas) == 2):
+    f_str = f"{rango_fechas[0].strftime('%d/%m/%Y')} a {rango_fechas[1].strftime('%d/%m/%Y')}" if isinstance(rango_fechas, tuple) and len(rango_fechas) == 2 else "Todo el año"
+    p_str = f"{len(prov_sel)} seleccionado(s)" if prov_sel else "Todos"
+    st.caption(f"🔎 **Filtros Activos:** Fechas: `{f_str}` | Proveedores: `{p_str}` | Registros filtrados: `{len(df_filtrado):,}`")
+
 st.markdown("---")
 
-total_ventas = df['VENTAS'].sum()
-q1_ventas = df[df['Trimestre'] == 'Q1']['VENTAS'].sum()
-q2_ventas = df[df['Trimestre'] == 'Q2']['VENTAS'].sum()
-q3_ventas = df[df['Trimestre'] == 'Q3']['VENTAS'].sum()
-q4_ventas = df[df['Trimestre'] == 'Q4']['VENTAS'].sum()
+total_ventas = df_filtrado['VENTAS'].sum()
+q1_ventas = df_filtrado[df_filtrado['Trimestre'] == 'Q1']['VENTAS'].sum()
+q2_ventas = df_filtrado[df_filtrado['Trimestre'] == 'Q2']['VENTAS'].sum()
+q3_ventas = df_filtrado[df_filtrado['Trimestre'] == 'Q3']['VENTAS'].sum()
+q4_ventas = df_filtrado[df_filtrado['Trimestre'] == 'Q4']['VENTAS'].sum()
 
 kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
 
@@ -168,12 +183,11 @@ kpi5.metric("❄️ Q4 (Oct-Dic)", f"${q4_ventas:,.2f}")
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Colors palette para gráficos gerenciales
 FONDO_GRAFICA = "#131c2e"
 TEXTO_COLOR = "#f8fafc"
 
-if df.empty:
-    st.warning("⚠️ No se encontraron registros para los filtros seleccionados.")
+if df_filtrado.empty:
+    st.warning("⚠️ No existen ventas registradas para el rango de fechas y filtros seleccionados. Por favor ajusta la combinación de filtros en el panel izquierdo.")
 else:
     # ---------------------------------------------------------
     # 5. FILA 1: VENTAS POR MES Y DONUT TOP 10 PRODUCTOS
@@ -182,19 +196,15 @@ else:
 
     with col_mes:
         with st.container(border=True):
-            st.subheader("📈 Ventas Totales por Mes")
+            st.subheader("📈 Ventas por Mes (Rango Filtrado)")
             
-            meses_orden = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
-                           'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-            
-            df_mes = df.groupby(['Mes_Num', 'Mes_Nombre'])['VENTAS'].sum().reset_index()
-            df_mes = df_mes.sort_values('Mes_Num')
+            df_mes = df_filtrado.groupby(['Mes_Num', 'Mes_Nombre'])['VENTAS'].sum().reset_index().sort_values('Mes_Num')
 
             fig_mes = go.Figure()
             fig_mes.add_trace(go.Bar(
                 x=df_mes['Mes_Nombre'],
                 y=df_mes['VENTAS'],
-                text=[f"${v/1000:,.0f}k" for v in df_mes['VENTAS']],
+                text=[f"${v:,.0f}" for v in df_mes['VENTAS']],
                 textposition='outside',
                 marker=dict(color=df_mes['VENTAS'], colorscale='Viridis'),
                 hovertemplate="<b>%{x}</b><br>Ventas: $%{-y:,.2f}<extra></extra>"
@@ -212,14 +222,14 @@ else:
 
     with col_pie:
         with st.container(border=True):
-            st.subheader("🌐 Top 10 Productos (Dona 3D)")
-            top10_prod = df.groupby('PRODUCTO')['VENTAS'].sum().nlargest(10).reset_index()
+            st.subheader("🌐 Top 10 Productos Más Vendidos")
+            top10_prod = df_filtrado.groupby('PRODUCTO')['VENTAS'].sum().nlargest(10).reset_index()
 
             fig_donut = go.Figure(data=[go.Pie(
                 labels=top10_prod['PRODUCTO'],
                 values=top10_prod['VENTAS'],
                 hole=0.45,
-                pull=[0.05] * len(top10_prod),
+                pull=[0.03] * len(top10_prod),
                 textinfo='percent',
                 hovertemplate="<b>%{label}</b><br>Ventas: $%{-value:,.2f}<br>Porcentaje: %{percent}<extra></extra>",
                 marker=dict(colors=px.colors.qualitative.Bold)
@@ -244,7 +254,7 @@ else:
     with col_cli:
         with st.container(border=True):
             st.subheader("🏢 Top 20 Clientes con Mayor Compra")
-            top20_cli = df.groupby('CLIENTE')['VENTAS'].sum().nlargest(20).reset_index().sort_values('VENTAS', ascending=True)
+            top20_cli = df_filtrado.groupby('CLIENTE')['VENTAS'].sum().nlargest(20).reset_index().sort_values('VENTAS', ascending=True)
 
             fig_cli = px.bar(
                 top20_cli,
@@ -253,7 +263,7 @@ else:
                 orientation='h',
                 color='VENTAS',
                 color_continuous_scale='Blues',
-                text=[f"${v/1000:,.0f}k" for v in top20_cli['VENTAS']]
+                text=[f"${v:,.0f}" for v in top20_cli['VENTAS']]
             )
             fig_cli.update_traces(textposition='outside')
             fig_cli.update_layout(
@@ -270,7 +280,7 @@ else:
     with col_prov:
         with st.container(border=True):
             st.subheader("🏭 Top 20 Proveedores con Mayor Venta")
-            top20_prov = df.groupby('Nombre proveedor')['VENTAS'].sum().nlargest(20).reset_index().sort_values('VENTAS', ascending=True)
+            top20_prov = df_filtrado.groupby('Nombre proveedor')['VENTAS'].sum().nlargest(20).reset_index().sort_values('VENTAS', ascending=True)
 
             fig_prov = px.bar(
                 top20_prov,
@@ -279,7 +289,7 @@ else:
                 orientation='h',
                 color='VENTAS',
                 color_continuous_scale='Tealgrn',
-                text=[f"${v/1000:,.0f}k" for v in top20_prov['VENTAS']]
+                text=[f"${v:,.0f}" for v in top20_prov['VENTAS']]
             )
             fig_prov.update_traces(textposition='outside')
             fig_prov.update_layout(
@@ -296,14 +306,14 @@ else:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ---------------------------------------------------------
-    # 7. FILA 3: TOP 20 PRODUCTOS Y TOP 10 GRUPOS
+    # 7. FILA 3: TOP 20 PRODUCTOS Y TOP 10 GRUPOS DE PRODUCTO
     # ---------------------------------------------------------
     col_p20, col_grp = st.columns([1.1, 0.9])
 
     with col_p20:
         with st.container(border=True):
-            st.subheader("📦 Top 20 Productos más Vendidos")
-            top20_prod = df.groupby('PRODUCTO')['VENTAS'].sum().nlargest(20).reset_index().sort_values('VENTAS', ascending=True)
+            st.subheader("📦 Top 20 Productos Más Vendidos")
+            top20_prod = df_filtrado.groupby('PRODUCTO')['VENTAS'].sum().nlargest(20).reset_index().sort_values('VENTAS', ascending=True)
 
             fig_p20 = px.bar(
                 top20_prod,
@@ -312,7 +322,7 @@ else:
                 orientation='h',
                 color='VENTAS',
                 color_continuous_scale='Purples',
-                text=[f"${v/1000:,.0f}k" for v in top20_prod['VENTAS']]
+                text=[f"${v:,.0f}" for v in top20_prod['VENTAS']]
             )
             fig_p20.update_traces(textposition='outside')
             fig_p20.update_layout(
@@ -329,7 +339,7 @@ else:
     with col_grp:
         with st.container(border=True):
             st.subheader("🏷️ Top 10 Grupos de Productos")
-            top10_grp = df.groupby('grupos de productos')['VENTAS'].sum().nlargest(10).reset_index().sort_values('VENTAS', ascending=True)
+            top10_grp = df_filtrado.groupby('grupos de productos')['VENTAS'].sum().nlargest(10).reset_index().sort_values('VENTAS', ascending=True)
 
             fig_grp = px.bar(
                 top10_grp,
@@ -338,7 +348,7 @@ else:
                 orientation='h',
                 color='VENTAS',
                 color_continuous_scale='Plasma',
-                text=[f"${v/1000:,.0f}k" for v in top10_grp['VENTAS']]
+                text=[f"${v:,.0f}" for v in top10_grp['VENTAS']]
             )
             fig_grp.update_traces(textposition='outside')
             fig_grp.update_layout(
@@ -353,11 +363,11 @@ else:
             st.plotly_chart(fig_grp, use_container_width=True)
 
     # ---------------------------------------------------------
-    # 8. DETALLE EN TABLA EXPANDIBLE
+    # 8. DETALLE DE TABLA
     # ---------------------------------------------------------
     st.markdown("<br>", unsafe_allow_html=True)
-    with st.expander("📄 Ver Registro Completo de Operaciones Filtradas"):
+    with st.expander("📄 Ver Registro Detallado de Operaciones Filtradas"):
         st.dataframe(
-            df[['Fecha de contabilización', 'CLIENTE', 'Nombre proveedor', 'PRODUCTO', 'grupos de productos', 'CANTIDAD', 'VENTAS']],
+            df_filtrado[['Fecha de contabilización', 'CLIENTE', 'Nombre proveedor', 'PRODUCTO', 'grupos de productos', 'CANTIDAD', 'VENTAS']],
             use_container_width=True
         )
